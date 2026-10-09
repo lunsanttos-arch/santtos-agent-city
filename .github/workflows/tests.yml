@@ -1,0 +1,28 @@
+name: Testes Agent City
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verificar sintaxe
+        run: |
+          node --check server.js
+          node --check world.js
+          node --check civic.js
+          node --input-type=module --check < public/app.js
+          node --input-type=module --check < public/isometric.js
+          node --input-type=module --check < public/institutions.js
+      - name: Executar testes
+        run: npm test
