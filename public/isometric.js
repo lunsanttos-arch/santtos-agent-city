@@ -124,9 +124,9 @@ export function renderIsometric(ctx,{terrain,objects,jobs,avatars,player,hover,e
   ctx.fillStyle='#85c776';ctx.fillRect(-4500,-4500,9000,9000);
   for(let y=0;y<terrain.length;y++)for(let x=0;x<terrain[y].length;x++){const p=projectIso(x,y);if(camera&&(Math.abs(p.x-camera.cx)>610/camera.zoom||Math.abs(p.y-camera.cy)>435/camera.zoom))continue;tile(ctx,x,y,terrain[y][x],(x*1337+y*613)%101,time)}
   const active=jobs.filter(j=>j.connected&&(['running','waiting'].includes(j.status)||(j.status==='completed'&&Date.now()-j.updated<300000)));
-  const items=[...objects.map(o=>({depth:o.x+o.y+o.w+o.h,kind:'obj',obj:o})),...avatars.filter(({job})=>active.some(j=>j.id===job.id)).map(a=>({depth:a.y+a.x,kind:'agent',a})),{depth:player.x+player.y,kind:'mayor'}].sort((a,b)=>a.depth-b.depth);
+  const items=[...objects.map(o=>({depth:o.x+o.y+o.w+o.h,kind:'obj',obj:o})),...avatars.filter(a=>a.resident||a.job&&active.some(j=>j.id===a.job.id)).map(a=>({depth:a.y+a.x,kind:'agent',a})),{depth:player.x+player.y,kind:'mayor'}].sort((a,b)=>a.depth-b.depth);
   for(const i of items){if(i.kind==='obj'){const o=i.obj;const c=projectIso(o.x+o.w/2,o.y+o.h/2);if(camera&&(Math.abs(c.x-camera.cx)>760/camera.zoom||Math.abs(c.y-camera.cy)>590/camera.zoom))continue;decor(ctx,{...o,activeCount:active.filter(j=>j.projectId===o.projectId).length})}
-    else if(i.kind==='agent'){const p=projectIso(i.a.x,i.a.y);drawPerson(p.x,p.y-21,i.a.color,i.a.dir,i.a.frame,.8);}
+    else if(i.kind==='agent'){const p=projectIso(i.a.x,i.a.y);drawPerson(p.x,p.y-21,i.a.color,i.a.dir,i.a.frame,.8);if(i.a.resident){ctx.textAlign='center';ctx.font='bold 8px monospace';ctx.fillStyle=i.a.working?'#0c633e':'#3a425c';ctx.fillText(i.a.name.slice(0,13),p.x,p.y-51);ctx.fillStyle=i.a.working?'#70f3af':'#c6cad7';ctx.fillRect(p.x-2,p.y-47,4,4);}}
     else {const p=projectIso(player.x,player.y);drawPerson(p.x,p.y-21,'#995bcb',player.facing,player.frame,.8)}
   }
   if(editing&&hover&&hover.x>=0&&hover.y>=0&&hover.x<terrain[0].length&&hover.y<terrain.length){const size=tool==='office'?[6,5]:tool==='house'?[4,4]:tool==='fountain'?[3,3]:[1,1];const f=quad(hover.x,hover.y,size[0],size[1],3);poly(ctx,f,'#deb6f058','#fff6ca')}

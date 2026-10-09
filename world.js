@@ -4,7 +4,7 @@ const W=68,H=52;
 const serviceDefs=[
   ['cityhall','PREFEITURA',28,19,8,6],
   ['library','BIBLIOTECA',5,19,7,5],
-  ['university','UNIVERSIDADE',6,4,8,6],
+  ['university','UNIVERSIDADE',6,4,10,8],
   ['police','POLÍCIA',48,20,7,5],
   ['talents','AGÊNCIA DE TALENTOS',49,4,9,6]
 ];

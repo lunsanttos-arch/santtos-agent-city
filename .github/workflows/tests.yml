@@ -14,9 +14,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Validar sintaxe
+      - name: Verificar sintaxe dos módulos
         run: |
-          for f in server.js world.js github.js civic.js security.js; do node --check "$f"; done
-          for f in public/*.js; do node --input-type=module --check < "$f"; done
+          node --check server.js
+          node --check academy.js
+          node --check civic.js
+          node --check security.js
+          node --check world.js
+          node --input-type=module --check < public/app.js
+          node --input-type=module --check < public/isometric.js
+          node --input-type=module --check < public/interior-world.js
+          node --input-type=module --check < public/institutions.js
       - name: Executar testes
         run: npm test

@@ -23,3 +23,38 @@ async function reviewPublicRepo(repo,fetchImpl=fetch){
  return {repo,filesReviewed:reviewed,filesCandidate:sources.length,findings:findings.slice(0,75),status:'triagem parcial',note:'Heurística de até 18 arquivos públicos pequenos. Não é auditoria completa nem prova de segurança.'};
 }
 module.exports={scanSource,reviewPublicRepo,validRepo};
+
+// Complementary inspection by the second officer: dependencies and GitHub workflows.
+function inspectConfigFiles(files){
+ const findings=[];
+ for(const item of files){
+  const content=String(item.content||'').slice(0,90000),lines=content.split(/\r?\n/),file=item.path;
+  if(file==='package.json'){
+   try{const pkg=JSON.parse(content);for(const [name,version] of Object.entries({...pkg.dependencies,...pkg.devDependencies})){
+    if(/^(?:\*|latest|https?:|git\+|file:)/.test(String(version)))findings.push({file,line:1,id:'unpinned-dependency',severity:'medium',message:'Dependência sem versão fixa ou remota: '+String(name).slice(0,70)});
+   }}catch{findings.push({file,line:1,id:'invalid-manifest',severity:'low',message:'package.json não pôde ser interpretado'});}
+  }
+  if(/\.github\/workflows\/.+\.ya?ml$/.test(file)){
+   for(const [i,line] of lines.entries()){
+    if(/\bpermissions\s*:\s*write-all\b/.test(line))findings.push({file,line:i+1,id:'broad-permissions',severity:'high',message:'Workflow com permissões globais de escrita'});
+    if(/\bpull_request_target\s*:/.test(line))findings.push({file,line:i+1,id:'pr-target',severity:'medium',message:'Workflow pull_request_target: conferir checkout de código não confiável'});
+    if(/curl\s+.*\|\s*(?:bash|sh)\b/.test(line))findings.push({file,line:i+1,id:'pipe-shell',severity:'medium',message:'Script remoto executado diretamente no shell'});
+   }
+  }
+ }
+ return findings.slice(0,40);
+}
+async function reviewPublicConfig(repo,fetchImpl=fetch){
+ if(!validRepo(repo))throw Error('Repositório inválido');
+ const headers={'Accept':'application/vnd.github+json','User-Agent':'SanTTos-Agent-City'};
+ const files=[];
+ async function get(path){const r=await fetchImpl('https://api.github.com/repos/'+repo+'/contents/'+path,{headers,signal:AbortSignal.timeout(8000)});if(r.status===404)return null;if(!r.ok)throw Error('GitHub HTTP '+r.status);return r.json();}
+ for(const filename of ['package.json','.github/workflows']){
+  const listing=await get(filename);if(!listing)continue;
+  const selected=Array.isArray(listing)?listing.filter(x=>x.type==='file'&&/\.ya?ml$/.test(x.path)).slice(0,4):[listing];
+  for(const item of selected){if(item.size>90000)continue;const result=item.content?item:await get(item.path);if(result?.encoding==='base64'&&result.content){files.push({path:item.path,content:Buffer.from(result.content,'base64').toString('utf8')});}}
+ }
+ return {files:files.map(x=>x.path),findings:inspectConfigFiles(files)};
+}
+module.exports.inspectConfigFiles=inspectConfigFiles;
+module.exports.reviewPublicConfig=reviewPublicConfig;

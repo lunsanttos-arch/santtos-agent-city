@@ -6,6 +6,7 @@ const os=require('node:os');
 const github=require('./github');
 const security=require('./security');
 const civic=require('./civic');
+const academy=require('./academy');
 const cp=require('node:child_process');
 const {randomUUID}=require('node:crypto');
 const {createWorld,editWorld}=require('./world');
@@ -27,8 +28,25 @@ if(world.version!==4 || world.w!==68 || world.h!==52){
   if(fs.existsSync(DATA)){fs.copyFileSync(DATA,DATA+'.v03-backup');}
 }
 for (const o of world.objects) { if(o.kind==='office'){delete o.dir; if(!o.github)o.github=null;} }
+// Ampliação da universidade existente (preserva todos os vínculos e edifícios customizados).
+const campus=world.objects.find(o=>o.kind==='service'&&o.service==='university');
+if(campus&&campus.w===8&&campus.h===6){const future={...campus,w:10,h:8};if(!world.objects.some(o=>o.id!==campus.id&&o.x<future.x+future.w&&o.x+o.w>future.x&&o.y<future.y+future.h&&o.y+o.h>future.y)){campus.w=10;campus.h=8;world.revision++;persist();}}
 function persist(){fs.mkdirSync(path.dirname(DATA),{recursive:true});const p=DATA+'.tmp';fs.writeFileSync(p,JSON.stringify(world,null,2));fs.renameSync(p,DATA);}
 const jobs=new Map();
+const tasks={research:{busy:false,last:0,result:null},engineer:{busy:false,last:0,result:null},police:{busy:false,last:0,result:null}};
+async function runDepartment(key,executor){
+ const task=tasks[key];if(task.busy){const err=Error('O setor já está trabalhando');err.status=409;throw err;}
+ if(Date.now()-task.last<60000){const err=Error('Aguarde 1 minuto para repetir esta operação');err.status=429;throw err;}
+ task.busy=true;task.last=Date.now();try{const result=await executor();task.result={ok:true,at:Date.now(),result};return task.result;}
+ catch(e){task.result={ok:false,at:Date.now(),error:String(e.message).slice(0,200)};throw e;}finally{task.busy=false;}
+}
+function projectList(){return world.objects.filter(o=>o.kind==='office');}
+let lastResearchAuto=0,lastPoliceAuto=0;
+function autoDepartments(){const settings=civic.getSettings(), now=Date.now();
+ if(settings.researchEnabled&&now-lastResearchAuto>=30*60000){lastResearchAuto=now;void runDepartment('research',()=>academy.discover()).then(()=>runDepartment('engineer',()=>academy.engineer(projectList()))).catch(e=>console.warn('[Universidade]',e.message));}
+ if(settings.policeEnabled&&now-lastPoliceAuto>=45*60000){lastPoliceAuto=now;void runDepartment('police',()=>academy.policePatrol(projectList())).catch(e=>console.warn('[Delegacia]',e.message));}
+}
+
 const PROVIDERS=['codex','claude','gemini','ollama','manus','demo'];
 function publicJob(j){return {id:j.id,projectId:j.projectId,provider:j.provider,agentId:j.agentId||null,prompt:j.prompt,model:j.model,status:j.status,phase:j.phase,log:j.log.slice(-12000),created:j.created,updated:j.updated,remoteUrl:j.remoteUrl||null,connected:!!j.connected,changed:!!j.changed,prUrl:j.prUrl||null};}
 function pushLog(j,text){j.log=(j.log+String(text)).slice(-18000);j.updated=Date.now();}
@@ -140,6 +158,7 @@ function createApp(){return http.createServer(async(req,res)=>{
     if(req.method==='GET'&&url.pathname==='/api/state')return send(res,200,state());
     if(req.method==='GET'&&url.pathname==='/api/health')return send(res,200,{ok:true});
     if(req.method==='GET'&&url.pathname==='/api/civic')return send(res,200,civic.all());
+    if(req.method==='GET'&&url.pathname==='/api/civic/departments')return send(res,200,{tasks});
     if(req.method==='GET'&&url.pathname==='/api/library/search'){
       const q=String(url.searchParams.get('q')||'').trim().slice(0,120);
       if(q.length<2)fail(400,'Pesquise pelo menos dois caracteres');
@@ -157,6 +176,13 @@ function createApp(){return http.createServer(async(req,res)=>{
       if(!(req.headers['content-type']||'').startsWith('application/json'))fail(415,'JSON obrigatório');
       const b=await readJson(req);
       if(url.pathname==='/api/civic/agent'){try{return send(res,201,{agent:civic.addAgent(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/agent/assign'){try{return send(res,200,{agent:civic.assignAgent(b,projectList().map(p=>p.projectId))});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/automation'){try{return send(res,200,{settings:civic.setAutomation(b.name,b.enabled)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/research/run')return send(res,200,await runDepartment('research',()=>academy.discover()));
+      if(url.pathname==='/api/civic/engineer/run')return send(res,200,await runDepartment('engineer',()=>academy.engineer(projectList())));
+      if(url.pathname==='/api/civic/police/run')return send(res,200,await runDepartment('police',()=>academy.policePatrol(projectList())));
+      if(url.pathname==='/api/civic/discovery/curate'){try{return send(res,200,{discovery:civic.curateDiscovery(b.id,b.collectionId)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/suggestion/status'){try{return send(res,200,{suggestion:civic.updateSuggestion(b.id,b.status)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/collection'){try{return send(res,201,{collection:civic.addCollection(b)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/profile'){try{return send(res,201,{profile:civic.addProfile(b)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/collection/repo'){try{return send(res,200,{collection:civic.addRepoToCollection(b)});}catch(e){fail(400,e.message)}}
@@ -188,6 +214,7 @@ function createApp(){return http.createServer(async(req,res)=>{
         const p=project(b.projectId), provider=String(b.provider||''),prompt=String(b.prompt||'').trim();
         const agent=b.agentId?civic.getAgent(b.agentId):null;
         if(b.agentId&&(!agent||agent.provider!==provider))fail(422,'Agente não encontrado ou pertence a outro provedor');
+        if(agent?.projectId&&agent.projectId!==p.projectId)fail(422,'Este agente está designado para outro escritório');
         if(!PROVIDERS.includes(provider)||provider==='demo')fail(400,'Selecione um agente de IA real (modo demonstração desativado)');
         if(!p.github?.name)fail(422,'Vincule primeiro um repositório do GitHub a este projeto.');
         if(prompt.length<4||prompt.length>5500)fail(400,'Missão deve ter entre 4 e 5500 caracteres');
@@ -214,5 +241,5 @@ function createApp(){return http.createServer(async(req,res)=>{
     send(res,405,{error:'Método não permitido'});
   }catch(e){send(res,e.status||500,{error:e.status?e.message:'Erro interno: '+e.message});}
 });}
-if(require.main===module){const app=createApp();app.listen(PORT,'127.0.0.1',()=>console.log('SanTTos Agent City: http://127.0.0.1:'+PORT));}
+if(require.main===module){const app=createApp();app.listen(PORT,'127.0.0.1',()=>{console.log('SanTTos Agent City: http://127.0.0.1:'+PORT);autoDepartments();});const autoTimer=setInterval(autoDepartments,120000);autoTimer.unref?.();}
 module.exports={createApp,publicJob,extractStatus};

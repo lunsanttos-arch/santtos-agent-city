@@ -1,14 +1,5 @@
-node_modules/
 .env
-.env.*
-!.env.example
 data/
+node_modules/
 *.log
-coverage/
-dist/
-build/
-.cache/
-.DS_Store
-Thumbs.db
-*.key
-*.pem
+*.png
