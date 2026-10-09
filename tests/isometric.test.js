@@ -12,3 +12,8 @@ test('hit test do telhado reconhece o prédio correto',async()=>{
  const objs=[{kind:'office',id:'A',x:5,y:4,w:5,h:4},{kind:'house',id:'B',x:25,y:19,w:3,h:3}];
  const p=projectIso(7.5,6,52);const b=hitIsoObject(objs,p.x,p.y);assert.equal(b?.id,'A');
 });
+
+test('altura do sprite permanece estável após alinhamento fracionário',async()=>{
+ const src=fs.readFileSync(path.join(__dirname,'..','public','atlas.js'),'utf8'),atlas=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ for(const kind of ['house','office']){const object={id:'stable-id',kind,x:4,y:37};const height=atlas.atlasBuildingHeight(object,100);assert(Number.isFinite(height));assert.equal(atlas.atlasBuildingHeight({...object,x:4.25,y:37.75},100),height);}
+});

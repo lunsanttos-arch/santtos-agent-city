@@ -44,7 +44,7 @@ function universityRooms(c){
 function worker(c,draw,x,y,name,skin,time,speech){
  draw(x,y,skin||{hair:1,skinTone:1,outfit:'#6d85bd',hat:0},'down',time/400,1.5);
  label(c,name,x,y-39,'#fff7d9',9);
- if(speech)label(c,speech,x,y+38,'#baffdf',8);
+ c.save();c.font='bold 10px monospace';c.textAlign='center';c.fillStyle='#2d344e';if(speech==='TRABALHANDO'||speech==='IA EM MISSÃO'){rect(c,x-7,y-64,14,10,'#35465c');rect(c,x-5,y-62,10,6,'#9aefda');rect(c,x-5,y-53,10,3,'#35465c');}else c.fillText(time?'♪':'ZZZ',x,y-59);c.restore();
 }
 export function renderInterior(ctx,{service,world,jobs,civic,time,drawAgent,onBubble,tasks={},onActor}){
  const def=SERVICES[service];if(!def)return false;
@@ -65,17 +65,18 @@ export function renderInterior(ctx,{service,world,jobs,civic,time,drawAgent,onBu
  for(const staff of interiorStaff(service,tasks)){
   const x=staff.id==='librarian'?75+(Math.sin(time/1600)+1)*130:staff.x,y=staff.y;
   const busy=staff.service==='police'?tasks.police?.busy:staff.id==='researcher'?tasks.research?.busy:staff.id==='engineer'?tasks.engineer?.busy:false;
-  worker(ctx,drawAgent,x,y,staff.name.toUpperCase(),{spriteIndex:staff.sprite},busy?time:0,busy?'TRABALHANDO':staff.role.toUpperCase());
+  worker(ctx,drawAgent,x,y,staff.name.toUpperCase(),{spriteIndex:staff.sprite},busy||staff.id==='librarian'?time:0,busy?'TRABALHANDO':staff.role.toUpperCase());
   onActor?.({x,y,staff});
  }
  if(service==='cityhall'){const reminder=civic.reminders?.find(r=>!r.done);if(reminder&&onBubble)onBubble(ctx,480,186,reminder.message,245);}
  if(service==='police'&&!tasks.police?.busy)label(ctx,'POLICIAIS EM RONDA PELA CIDADE',690,512,'#baffdf',10);
 
  agents.slice(0,9).forEach((a,i)=>{
-  const x=service==='university'?160+i%4*160:service==='library'?520+(i%3)*110:190+(i%4)*166;
+  const baseX=service==='university'?160+i%4*160:service==='library'?520+(i%3)*110:190+(i%4)*166;
+  const wandering=!isWorking(a.id,jobs)&&Math.floor(time/20000)%2===1,x=baseX+(wandering?Math.sin(time/2300+i)*24:0);
   const y=service==='university'?523+(i>=4?35:0):i<4?525:560;
   const active=isWorking(a.id,jobs);onActor?.({x,y,agent:a});
-  worker(ctx,drawAgent,x,y,a.name.toUpperCase(),a.skin,time+i*320,active?'IA EM MISSÃO':'PERFIL CADASTRADO');
+  worker(ctx,drawAgent,x,y,a.name.toUpperCase(),a.skin,active||wandering?time+i*320:0,active?'IA EM MISSÃO':'PERFIL CADASTRADO');
  });
  label(ctx,'EQUIPE INSTITUCIONAL: AUTOMAÇÕES LOCAIS  •  IA SOMENTE QUANDO CONECTADA',480,628,'#f0e2c8',10);
  return true;

@@ -127,10 +127,22 @@ function drawTree(ctx,o){const p=projectIso(o.x+.5,o.y+.5);ctx.fillStyle='#72563
   poly(ctx,[{x:p.x-18,y:p.y-18},{x:p.x-13,y:p.y-30},{x:p.x-4,y:p.y-34},{x:p.x+7,y:p.y-31},{x:p.x+17,y:p.y-19},{x:p.x+12,y:p.y-9},{x:p.x-12,y:p.y-8}],'#377750','#285e43');
   poly(ctx,[{x:p.x-12,y:p.y-20},{x:p.x-10,y:p.y-31},{x:p.x+2,y:p.y-37},{x:p.x+12,y:p.y-25},{x:p.x+6,y:p.y-19}],'#58a76b');ctx.fillStyle='#9bd47f';ctx.fillRect(p.x-5,p.y-31,4,3);
 }
-function decor(ctx,o){const p=projectIso(o.x+.5,o.y+.5);
+export function drawActivity(ctx,x,y,state='rest'){
+ ctx.save();ctx.textAlign='center';ctx.font='bold 9px monospace';
+ if(state==='work'){ctx.fillStyle='#35465c';ctx.fillRect(x-7,y-9,14,10);ctx.fillStyle='#9aefda';ctx.fillRect(x-5,y-7,10,6);ctx.fillStyle='#35465c';ctx.fillRect(x-2,y+1,4,2);ctx.fillRect(x-6,y+3,12,2);}
+ else{ctx.fillStyle='#35465c';ctx.fillText(state==='walk'?'♪':'ZZZ',x,y);}
+ ctx.restore();
+}
+function decor(ctx,o,time=0){const p=projectIso(o.x+.5,o.y+.5);
   if(o.kind==='tree')drawTree(ctx,o);else if(o.kind==='flower'){ctx.fillStyle='#eb8daf';ctx.fillRect(p.x-4,p.y-4,3,3);ctx.fillStyle='#fff0aa';ctx.fillRect(p.x+3,p.y,3,2)}
   else if(o.kind==='lamp'){ctx.fillStyle='#6c6080';ctx.fillRect(p.x-2,p.y-21,4,21);ctx.fillStyle='#fbe2a7';ctx.fillRect(p.x-5,p.y-26,11,8)}
-  else if(o.kind==='fountain'){if(drawAtlasFountain(ctx,projectIso(o.x+o.w/2,o.y+o.h/2),(o.w+o.h)*ISO.tileWidth/2+10))return;poly(ctx,quad(o.x,o.y,o.w,o.h,1),'#d8d4bb');poly(ctx,quad(o.x+.3,o.y+.3,o.w-.6,o.h-.6,2),'#65bde0');ctx.fillStyle='#e9f4ed';ctx.fillRect(p.x-3,p.y-13,7,14);ctx.fillStyle='#91e4f0';ctx.fillRect(p.x-2,p.y-21,4,9)}
+  else if(o.kind==='fountain'){
+   const center=projectIso(o.x+o.w/2,o.y+o.h/2),width=(o.w+o.h)*ISO.tileWidth/2+10;
+   if(!drawAtlasFountain(ctx,center,width)){poly(ctx,quad(o.x,o.y,o.w,o.h,1),'#d8d4bb');poly(ctx,quad(o.x+.3,o.y+.3,o.w-.6,o.h-.6,2),'#65bde0');}
+   const top=center.y-width*.29;
+   for(let stream=-1;stream<=1;stream++)for(let n=0;n<9;n++){const t=((time/900+n/9)%1),x=center.x+stream*Math.sin(t*Math.PI)*width*.19,y=top-22*Math.sin(t*Math.PI)+t*19;ctx.fillStyle=n%2?'#e9ffff':'#7de0f3';ctx.fillRect(Math.round(x),Math.round(y),2,3);}
+   for(let n=0;n<3;n++){const phase=(time/1600+n/3)%1;ctx.strokeStyle=phase<.65?'#c3f7ff':'#83d7e7';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(center.x,center.y-6,7+phase*25,2+phase*6,0,0,Math.PI*2);ctx.stroke();}
+  }
   else if(o.kind==='office')drawBuilding(ctx,o,o.activeCount||0);else if(o.kind==='house')drawHouse(ctx,o);else if(o.kind==='service')drawService(ctx,o);
 }
 export function renderIsometric(ctx,{terrain,objects,jobs,avatars,player,hover,editing,tool,time,drawPerson,camera,playerSkin,onPerson}){
@@ -138,8 +150,8 @@ export function renderIsometric(ctx,{terrain,objects,jobs,avatars,player,hover,e
   for(let y=0;y<terrain.length;y++)for(let x=0;x<terrain[y].length;x++){const p=projectIso(x,y);if(camera&&(Math.abs(p.x-camera.cx)>610/camera.zoom||Math.abs(p.y-camera.cy)>435/camera.zoom))continue;tile(ctx,x,y,terrain[y][x],(x*1337+y*613)%101,time,terrain)}
   const active=jobs.filter(j=>j.connected&&(['running','waiting'].includes(j.status)||(j.status==='completed'&&Date.now()-j.updated<300000)));
   const items=[...objects.map(o=>({depth:o.x+o.y+o.w+o.h,kind:'obj',obj:o})),...avatars.filter(a=>a.resident||a.job&&active.some(j=>j.id===a.job.id)).map(a=>({depth:a.y+a.x,kind:'agent',a})),{depth:player.x+player.y,kind:'mayor'}].sort((a,b)=>a.depth-b.depth);
-  for(const i of items){if(i.kind==='obj'){const o=i.obj;const c=projectIso(o.x+o.w/2,o.y+o.h/2);if(camera&&(Math.abs(c.x-camera.cx)>760/camera.zoom||Math.abs(c.y-camera.cy)>590/camera.zoom))continue;decor(ctx,{...o,activeCount:active.filter(j=>j.projectId===o.projectId).length})}
-    else if(i.kind==='agent'){const p=projectIso(i.a.x,i.a.y);if(onPerson&&(i.a.agent||i.a.staff))onPerson({x:p.x,y:p.y-21,agent:i.a.agent,staff:i.a.staff});drawPerson(p.x,p.y-21,i.a.color,i.a.dir,i.a.frame,.8);if(i.a.resident){ctx.textAlign='center';ctx.font='bold 8px monospace';ctx.fillStyle=i.a.working?'#0c633e':'#3a425c';ctx.fillText(i.a.name.slice(0,13),p.x,p.y-51);ctx.fillStyle=i.a.working?'#70f3af':'#c6cad7';ctx.fillRect(p.x-2,p.y-47,4,4);}}
+  for(const i of items){if(i.kind==='obj'){const o=i.obj;const c=projectIso(o.x+o.w/2,o.y+o.h/2);if(camera&&(Math.abs(c.x-camera.cx)>760/camera.zoom||Math.abs(c.y-camera.cy)>590/camera.zoom))continue;decor(ctx,{...o,activeCount:active.filter(j=>j.projectId===o.projectId).length},time)}
+    else if(i.kind==='agent'){const p=projectIso(i.a.x,i.a.y);if(onPerson&&(i.a.agent||i.a.staff))onPerson({x:p.x,y:p.y-21,agent:i.a.agent,staff:i.a.staff});drawPerson(p.x,p.y-21,i.a.color,i.a.dir,i.a.frame,.8);if(i.a.resident){ctx.textAlign='center';ctx.font='bold 8px monospace';ctx.fillStyle=i.a.working?'#0c633e':'#3a425c';ctx.fillText(i.a.name.slice(0,13),p.x,p.y-51);drawActivity(ctx,p.x,p.y-64,i.a.working?'work':i.a.moving?'walk':'rest');}}
     else {const p=projectIso(player.x,player.y);drawPerson(p.x,p.y-21,playerSkin||{player:true,spriteIndex:0},player.facing,player.frame,.8)}
   }
   if(editing&&hover&&hover.x>=0&&hover.y>=0&&hover.x<terrain[0].length&&hover.y<terrain.length){const size=tool==='office'?[6,5]:tool==='house'?[4,4]:tool==='fountain'?[3,3]:[1,1];const f=quad(hover.x,hover.y,size[0],size[1],3);poly(ctx,f,'#deb6f058','#fff6ca')}

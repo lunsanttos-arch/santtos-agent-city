@@ -28,3 +28,13 @@ test('serviços públicos são preservados e podem ser movidos',()=>{
  assert.throws(()=>editWorld(w,{revision:w.revision,tool:'erase',x:hall.x,y:hall.y}),/essencial/);
  assert.equal(w.w,68);assert.equal(w.h,52);
 });
+
+test('ajuste fino aceita quartos de tile sem perder identidade e rejeita colisões',()=>{
+ const w=createWorld(),house=w.objects.find(o=>o.kind==='house');const id=house.id;
+ editWorld(w,{revision:w.revision,tool:'move',id,x:house.x+.25,y:house.y});
+ assert.equal(house.x,4.25);assert.equal(house.id,id);
+ const before=w.revision;
+ assert.throws(()=>editWorld(w,{revision:before,tool:'move',id,x:10,y:37}),/ocupada/);
+ assert.equal(w.revision,before);assert.equal(house.x,4.25);
+ for(const x of [4.1,NaN,Infinity,-.25,67.25])assert.throws(()=>editWorld(w,{revision:w.revision,tool:'move',id,x,y:37}));
+});
