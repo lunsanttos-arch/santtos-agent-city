@@ -227,7 +227,7 @@ function drawOffice(time){
  drawPerson(player.x*TILE,player.y*TILE-10,PLAYER_SKIN,player.facing,player.walking?player.frame:0,1.2);
 }
 
-function drawServiceInterior(time){scenePeople=[];renderInterior(ctx,{tasks:departmentState.tasks,onActor:a=>scenePeople.push(a),service:serviceObj?.service,world:store.world,jobs:store.jobs,civic:{...civicState,agents:civicState.agents.filter(a=>!residentAvatars.get(a.id)||residentAvatars.get(a.id).place==='service'||isWorking(a.id,store.jobs))},time,drawAgent:drawPerson,onBubble:renderSpeechBubble});drawPerson(player.x*TILE,player.y*TILE-10,PLAYER_SKIN,player.facing,player.walking?player.frame:0,1.2);}
+function drawServiceInterior(time){scenePeople=[];renderInterior(ctx,{tasks:departmentState.tasks,onActor:a=>scenePeople.push(a),service:serviceObj?.service,world:store.world,jobs:store.jobs,civic:{...civicState,agents:civicState.agents.filter(a=>!residentAvatars.get(a.id)||residentAvatars.get(a.id).place==='service')},time,drawAgent:drawPerson,onBubble:renderSpeechBubble});drawPerson(player.x*TILE,player.y*TILE-10,PLAYER_SKIN,player.facing,player.walking?player.frame:0,1.2);}
 function drawResidence(time){
  scenePeople=[];pixel(0,0,960,648,'#263c45');floor(50,100,860,487,'#d4ae79','#dfbd8a');
  // Three rooms with an open corridor, raised walls and original handheld-style furniture.
