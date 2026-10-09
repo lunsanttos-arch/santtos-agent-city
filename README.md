@@ -13,7 +13,7 @@ Os projetos são associados a **repositórios GitHub**, não a pastas permanente
 ## Estado atual
 
 - ✅ Repositório público da comunidade.
-- ✅ Protótipo local **v0.3** criado e testado; upload do código-fonte em preparação.
+- ✅ Código-fonte da **v0.3** publicado neste repositório. Inclui cidade isométrica, editor, interiores, servidor e testes.
 - 🚧 **v0.4 em desenvolvimento**: melhorias de arte, mapa maior e arquitetura dos prédios públicos.
 - ⚠️ Integrações externas ainda precisam de testes ponta a ponta com contas e CLIs reais.
 - ⚠️ O jogo não deve executar merge, deploy ou publicar alterações sem aprovação explícita.
@@ -44,7 +44,22 @@ Veja [ROADMAP.md](ROADMAP.md) e [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Desenvolvimento
 
-O código da versão executável anterior (v0.3) está sendo preparado para publicação. **Ainda não considere este repositório uma distribuição instalável.** As instruções de instalação e execução serão atualizadas assim que a importação dos arquivos for concluída.
+**A versão v0.3 está disponível para execução local**. Requer [Node.js 20+](https://nodejs.org/).
+
+No Windows, abra o PowerShell:
+
+```powershell
+git clone https://github.com/lunsanttos-arch/santtos-agent-city.git
+cd santtos-agent-city
+node --test
+npm start
+```
+
+Ou, após baixar e extrair o código pelo botão **Code → Download ZIP**, execute `INICIAR-SANTTOS-CITY.bat`. Acesse `http://127.0.0.1:4317`.
+
+Para integrar seus repositórios, instale o [GitHub CLI](https://cli.github.com/), faça login com `gh auth login` e configure os vínculos dentro da aplicação. Provedores de IA como Codex, Claude, Gemini, Ollama e Manus dependem de instalações ou credenciais próprias. **Não informe credenciais dentro de issues ou commits.**
+
+**Limitações:** este é um protótipo visual e técnico, não a versão v0.4 planejada. O visual e os serviços de Prefeitura, Biblioteca, Universidade, Polícia, Agência de Talentos e Casas ainda estão no roadmap. A integração ponta a ponta das CLIs e API Manus requer validação no computador do usuário.
 
 Para ajudar no projeto, leia [CONTRIBUTING.md](CONTRIBUTING.md). Questões de segurança devem seguir [SECURITY.md](SECURITY.md).
 
