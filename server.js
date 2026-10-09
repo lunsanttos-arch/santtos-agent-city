@@ -129,7 +129,7 @@ function serveFile(url,res){
   const pathname=new URL(url,'http://localhost').pathname;
   const target=path.resolve(PUBLIC,'.'+(pathname==='/'?'/index.html':pathname));
   if(!target.startsWith(PUBLIC+path.sep))return send(res,404,{error:'Não encontrado'});
-  fs.readFile(target,(err,b)=>{if(err)return send(res,404,{error:'Arquivo não encontrado'});res.writeHead(200,{'Content-Type':MIME[path.extname(target)]||'application/octet-stream','X-Content-Type-Options':'nosniff'});res.end(b);});
+  fs.readFile(target,(err,b)=>{if(err)return send(res,404,{error:'Arquivo não encontrado'});res.writeHead(200,{'Content-Type':MIME[path.extname(target)]||'application/octet-stream','X-Content-Type-Options':'nosniff','Cache-Control':'no-store'});res.end(b);});
 }
 function createApp(){return http.createServer(async(req,res)=>{
   try{
