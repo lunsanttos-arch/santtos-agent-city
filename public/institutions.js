@@ -14,7 +14,7 @@ const getActive=j=>j.connected&&['running','waiting'].includes(j.status);
 const DEPARTMENTS=[['cityhall','Prefeitura'],['police','Delegacia'],['library','Biblioteca'],['university','Universidade'],['talents','Central de Talentos'],['office','Escritórios de projetos']];
 function container(service,context){
  const [emoji,title,subtitle]=SERVICES[service]||['⌂','SAN TTOS','Cidade dos agentes'];
- const root=$('serviceContent');clear(root);root.append(element('span','AGENT CITY · V0.7','civic-eyebrow'));
+ const root=$('serviceContent');clear(root);root.append(element('span','AGENT CITY · V0.7.1','civic-eyebrow'));
  const h=element('h2',emoji+'  '+title);root.append(h,element('p',subtitle,'civic-subtitle'));
  const inner=element('div',null,'civic-body');root.append(inner);$('serviceModal').classList.remove('hidden');return inner;
 }
