@@ -21,6 +21,7 @@ jobs:
           node --check civic.js
           node --check security.js
           node --check world.js
+          node --check github.js
           node --input-type=module --check < public/app.js
           node --input-type=module --check < public/isometric.js
           node --input-type=module --check < public/interior-world.js

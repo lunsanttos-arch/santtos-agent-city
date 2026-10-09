@@ -182,12 +182,14 @@ function createApp(){return http.createServer(async(req,res)=>{
         const result=await response.json();return send(res,200,{repos:(result.items||[]).filter(x=>!x.private).slice(0,12).map(x=>({name:x.full_name,description:x.description,stars:x.stargazers_count,branch:x.default_branch,url:x.html_url}))});
       }catch(e){fail(503,'Busca GitHub indisponível: '+e.message)}
     }
+    if(req.method==='GET'&&url.pathname==='/api/github/status')return send(res,200,github.githubStatus());
     if(req.method==='GET'&&url.pathname==='/api/github/repos'){try{return send(res,200,{repos:github.listGithubRepos()});}catch(e){return send(res,503,{error:'Conecte-se ao GitHub com gh auth login: '+e.message});}}
     if(req.method==='POST'&&url.pathname.startsWith('/api/')){
       if(req.headers['x-santtos-city']!=='1')fail(403,'Cabeçalho de segurança ausente');
       if(req.headers.origin && !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.origin))fail(403,'Origem bloqueada');
       if(!(req.headers['content-type']||'').startsWith('application/json'))fail(415,'JSON obrigatório');
       const b=await readJson(req);
+      if(url.pathname==='/api/github/connect'){try{return send(res,200,github.connectGithub());}catch(e){fail(503,e.message)}}
       if(url.pathname==='/api/civic/agent'){try{return send(res,201,{agent:civic.addAgent(b)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/project-agent'){if([...jobs.values()].some(j=>j.agentId===b.agentId&&['running','waiting','pending'].includes(j.status)))fail(409,'Conclua ou cancele a missão antes de trocar o provedor');try{return send(res,200,{agent:civic.configureProjectAgent(b,projectList().map(p=>p.projectId))});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/agent/assign'){try{return send(res,200,{agent:civic.assignAgent(b,projectList().map(p=>p.projectId))});}catch(e){fail(400,e.message)}}

@@ -39,7 +39,7 @@ function editWorld(world,payload){
   if(!payload||typeof payload!=='object')throw new Error('Edição inválida');
   if(payload.revision!==world.revision)throw new Error('Mapa foi alterado. Atualize e tente novamente.');
   const {tool,x,y}=payload;
-  if(!validCoord(x,y))throw new Error('Posição inválida');
+  if(!(tool==='move'?Number.isFinite(x)&&Number.isFinite(y)&&x>=0&&y>=0&&x<W&&y<H&&Number.isInteger(x*4)&&Number.isInteger(y*4):validCoord(x,y)))throw new Error('Posição inválida');
   if(['road','grass','path','water'].includes(tool)){
     if(world.objects.some(o=>x>=o.x&&x<o.x+o.w&&y>=o.y&&y<o.y+o.h))throw new Error('Há uma construção nesta posição');
     world.terrain[y][x]=tool;

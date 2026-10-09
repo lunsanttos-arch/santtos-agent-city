@@ -17,7 +17,7 @@ const BUILDING_FRAMES=[
  [28,101,391,323],[467,110,404,317],[898,94,366,349],[1333,114,387,333],
  [43,467,355,378],[470,467,341,378],[840,467,458,378],[1320,501,442,347]
 ];
-function buildingIndex(o){return o.kind==='house'?Math.abs(o.x+o.y)%3:o.kind==='office'?4+Math.abs(o.x)%2:o.service==='university'?6:o.service==='talents'?3:7;}
+function buildingIndex(o){const variant=[...String(o.id||o.name||o.kind)].reduce((n,c)=>n+c.charCodeAt(0),0);return o.kind==='house'?variant%3:o.kind==='office'?4+variant%2:o.service==='university'?6:o.service==='talents'?3:7;}
 export function atlasBuildingHeight(o,width){const frame=BUILDING_FRAMES[buildingIndex(o)];return width*frame[3]/frame[2];}
 export function drawAtlasAgent(ctx, x, y, appearance, dir, walk, scale) {
   if(Number.isInteger(appearance.spriteIndex)&&staffAtlas?.complete&&staffAtlas.naturalWidth){
