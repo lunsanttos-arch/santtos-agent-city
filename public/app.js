@@ -15,7 +15,7 @@ const residentAvatars=new Map(); // Personagem cadastrado existe independentemen
 let githubRepos=[];let toastTimer;let serviceObj=null;let civicState={agents:[],reminders:[]};
 function toast(text){$('toast').textContent=text;$('toast').classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.add('hidden'),3300)}
 async function api(endpoint,body){const res=await fetch('/api/'+endpoint,{method:body?'POST':'GET',headers:{...(body?{'content-type':'application/json','x-santtos-city':'1'}:{})},body:body?JSON.stringify(body):undefined});const data=await res.json();if(!res.ok)throw Error(data.error||`HTTP ${res.status}`);return data;}
-async function refresh(){try{const next=await api('state');const oldRev=store.world.revision;store=next;civicState=await api('civic');updateAgentPick();if(oldRev!==next.world.revision){listProjects();if(selectedProject)drawInspector();}renderJobs();$('manusStatus').textContent=next.connections.manus?'● CONFIGURADO':'○ SEM CHAVE';$('manusStatus').style.color=next.connections.manus?'#82ebb2':'#9f91a6';$('githubTopStatus').textContent=next.connections.github?'GITHUB CONECTADO':'GITHUB NÃO CONECTADO';for(const [id,el] of [['codex','statusCodex'],['claude','statusClaude'],['gemini','statusGemini'],['ollama','statusOllama']]){const connected=id==='ollama'?next.connections.ollama:next.connections.localCli.includes(id);$(el).textContent=connected?(id==='ollama'?'● ONLINE':'● CLI INSTALADO'):'○ OFFLINE';$(el).style.color=connected?'#82ebb2':'#a08ba6'}$('counterBuildings').textContent=String(next.world.objects.filter(x=>x.kind==='office').length).padStart(2,'0')+' PRÉDIOS';$('counterMissions').textContent=String(next.jobs.length).padStart(2,'0')+' MISSÕES';}catch(e){toast('Erro de conexão: '+e.message);}}
+async function refresh(){try{const next=await api('state');const oldRev=store.world.revision;if(!next.world||!Array.isArray(next.world.terrain)||!next.world.terrain.length||!Array.isArray(next.world.objects)||!Array.isArray(next.jobs))throw Error('Mapa inválido recebido do servidor');store=next;updateSceneLabels();civicState=await api('civic');updateAgentPick();if(oldRev!==next.world.revision){listProjects();if(selectedProject)drawInspector();}renderJobs();$('manusStatus').textContent=next.connections.manus?'● CONFIGURADO':'○ SEM CHAVE';$('manusStatus').style.color=next.connections.manus?'#82ebb2':'#9f91a6';$('githubTopStatus').textContent=next.connections.github?'GITHUB CONECTADO':'GITHUB NÃO CONECTADO';for(const [id,el] of [['codex','statusCodex'],['claude','statusClaude'],['gemini','statusGemini'],['ollama','statusOllama']]){const connected=id==='ollama'?next.connections.ollama:next.connections.localCli.includes(id);$(el).textContent=connected?(id==='ollama'?'● ONLINE':'● CLI INSTALADO'):'○ OFFLINE';$(el).style.color=connected?'#82ebb2':'#a08ba6'}$('counterBuildings').textContent=String(next.world.objects.filter(x=>x.kind==='office').length).padStart(2,'0')+' PRÉDIOS';$('counterMissions').textContent=String(next.jobs.length).padStart(2,'0')+' MISSÕES';}catch(e){toast('Erro de conexão: '+e.message);}}
 const projects=()=>store.world.objects.filter(x=>x.kind==='office');
 function chooseProject(p,enter=true){serviceObj=null;selectedProject=p.projectId;selectedObj=p.id;if(enter){openInspector();if(scene==='city')cityPlayer={x:player.x,y:player.y};player.x=19.5;player.y=12.5;scene='office';editing=false;$('btnEditor').classList.remove('active');$('btnWorld').classList.add('active');$('editorPane').classList.add('hidden');$('inspectorPane').classList.remove('hidden');}
  drawInspector();renderJobs();updateSceneLabels();listProjects();}
@@ -133,11 +133,10 @@ function drawWorld(time){
  camera.cx+=(center.x-camera.cx)*.055;camera.cy+=(center.y-camera.cy)*.055;
  ctx.fillStyle='#78b66e';ctx.fillRect(0,0,960,648);
  ctx.save();ctx.translate(480,324);ctx.scale(camera.zoom,camera.zoom);ctx.translate(-camera.cx,-camera.cy);
- renderIsometric(ctx,{terrain:store.world.terrain,objects:store.world.objects,jobs:store.jobs,avatars:[
+ try{renderIsometric(ctx,{terrain:store.world.terrain,objects:store.world.objects,jobs:store.jobs,avatars:[
   ...[...residentAvatars].map(([id,a])=>{const resident=civicState.agents?.find(v=>v.id===id);return {...a,resident:true,name:resident?.name||'Agente',color:resident?.skin||'#d5c2ff',frame:a.last,working:store.jobs.some(j=>j.agentId===id&&j.connected&&['running','waiting'].includes(j.status))}}),
   ...[...jobAvatars].map(([id,a])=>({...a,job:store.jobs.find(j=>j.id===id),color:PROVIDER_INFO[a.id]?.color||'#d5c2ff',frame:a.last})).filter(a=>a.job&&!a.job.agentId)
- ],player,hover,editing,tool,time,drawPerson,camera});
- ctx.restore();
+ ],player,hover,editing,tool,time,drawPerson,camera});}finally{ctx.restore();}
  ctx.fillStyle='#1c2c2bc9';ctx.fillRect(710,600,220,28);ctx.fillStyle='#fffbe6';ctx.font='bold 12px monospace';ctx.textAlign='center';
  ctx.fillText(store.jobs.filter(j=>j.connected&&['running','waiting'].includes(j.status)).length+' AGENTES ATIVOS',820,619);
 }
@@ -168,7 +167,18 @@ function drawOffice(time){pixel(0,0,960,648,'#23364a');for(let x=0;x<960;x+=24){
 }
 function drawServiceInterior(time){renderInterior(ctx,{service:serviceObj?.service,world:store.world,jobs:store.jobs,civic:civicState,time,drawAgent:drawPerson,onBubble:renderSpeechBubble});}
 function drawResidence(time){floor(50,60,860,527,'#ebd9bd','#eee2cc');pixel(320,190,320,100,'#aa7382');pixel(342,212,280,64,'#e6bcc5');pixel(150,140,140,80,'#a67d61');pixel(164,125,116,28,'#83618a');plant(120,230);plant(830,230);bookshelf(620,130);pixel(50,300,860,9,'#a69490');pixel(50,560,860,12,'#9e8a87');label('CASA • SAN✦TTOS',480,50,'#fff','#724ba2','bold 15px monospace');}
-let previous=performance.now();function frame(time){const dt=Math.min(.055,(time-previous)/1000);previous=time;handleKeyboard(dt);updateProviders(dt,time);if(scene==='city')drawWorld(time);else if(scene==='office')drawOffice(time);else if(scene==='service')drawServiceInterior(time);else drawResidence(time);requestAnimationFrame(frame);}
+let previous=performance.now(),lastRenderError='';
+function frame(time){
+ const dt=Math.min(.055,(time-previous)/1000);previous=time;
+ try{
+  handleKeyboard(dt);updateProviders(dt,time);
+  if(scene==='city')drawWorld(time);else if(scene==='office')drawOffice(time);else if(scene==='service')drawServiceInterior(time);else drawResidence(time);
+  lastRenderError='';
+ }catch(e){
+  console.error('Falha ao desenhar a cidade:',e);
+  if(lastRenderError!==e.message){toast('Falha ao desenhar a cidade: '+e.message+' — abra F12 para detalhes.');lastRenderError=e.message;}
+ }finally{requestAnimationFrame(frame);}
+}
 function updateAgentPick(){const el=$('agentPick');if(!el)return;const value=el.value;el.replaceChildren(new Option('Agente do provedor (sem perfil)',''));(civicState.agents||[]).filter(a=>a.provider===$('provider').value&&(!a.projectId||a.projectId===selectedProject)).forEach(a=>el.add(new Option(a.name+' · '+(a.officeFunction||a.role),a.id)));if([...el.options].some(o=>o.value===value))el.value=value;}
 function updateModel(){$('modelRow').classList.toggle('hidden',$('provider').value!=='ollama');updateAgentPick();}
 $('btnWorld').onclick=()=>{hidePanels();serviceObj=null;if(scene!=='city'){player.x=cityPlayer.x;player.y=cityPlayer.y;}scene='city';editing=false;$('btnEditor').classList.remove('active');$('btnWorld').classList.add('active');$('editorPane').classList.add('hidden');$('inspectorPane').classList.remove('hidden');updateSceneLabels()};

@@ -12,7 +12,7 @@ if errorlevel 1 (
   echo.
   echo [ATENCAO] A porta 4317 ja esta sendo usada.
   echo Feche o CMD ou servidor das versoes antigas da SanTTos Agent City.
-  echo Depois execute este iniciador novamente para abrir a v0.4.
+  echo Depois execute este iniciador novamente para abrir a versao atual.
   echo.
   pause
   exit /b 2
