@@ -1,4 +1,4 @@
-import {drawAtlasBuilding,drawAtlasGround,drawAtlasFountain} from './atlas.js';
+import {drawAtlasBuilding,drawAtlasGround,drawAtlasFountain,atlasBuildingHeight} from './atlas.js';
 // SanTTos Agent City — projeção isométrica original 2:1.
 // O tile lógico agora é 68 × 52; o mapa do editor e as salas 2D são preservados.
 export const ISO={tileWidth:34,tileHeight:17,originX:530,originY:92};
@@ -10,7 +10,7 @@ function pointInside(poly_,p){let inside=false;for(let i=0,j=poly_.length-1;i<po
 export function hitIsoObject(objects,px,py){
   // Primeiro os mais à frente; permite clicar no telhado e fachada, além do tile de base.
   for(const o of [...objects].sort((a,b)=>(b.x+b.y+b.w+b.h)-(a.x+a.y+a.w+a.h))){
-    const height=o.kind==='service'?Math.max(115,(o.w+o.h)*ISO.tileWidth/2*.64):o.kind==='office'?Math.max(95,(o.w+o.h)*ISO.tileWidth/2*.64):o.kind==='house'?Math.max(80,(o.w+o.h)*ISO.tileWidth/2*.60):o.kind==='tree'?37:o.kind==='lamp'?25:0;
+    const height=o.kind==='service'?Math.max(115,(o.w+o.h)*ISO.tileWidth/2*.90):o.kind==='office'?Math.max(95,(o.w+o.h)*ISO.tileWidth/2*1.10):o.kind==='house'?Math.max(80,(o.w+o.h)*ISO.tileWidth/2*.78):o.kind==='tree'?37:o.kind==='lamp'?25:0;
     const foot=quad(o.x,o.y,o.w,o.h),roof=quad(o.x,o.y,o.w,o.h,height);
     const center=projectIso(o.x+o.w/2,o.y+o.h/2);
     const region=[roof[0],roof[1],foot[1],foot[2],foot[3],roof[3]];
@@ -73,7 +73,7 @@ function frontDoor(ctx,o,z,accent){
  const step=projectIso(o.x+o.w*.57,o.y+o.h+0.15);poly(ctx,[{x:step.x-17,y:step.y},{x:step.x,y:step.y-5},{x:step.x+18,y:step.y},{x:step.x,y:step.y+5}],'#c6b2a0');
 }
 function drawBuilding(ctx,o,count){
- if(drawAtlasBuilding(ctx,o,projectIso(o.x+o.w/2,o.y+o.h/2),(o.w+o.h)*ISO.tileWidth/2+20)){signBoard(ctx,o,95,count);return;}
+ if(drawAtlasBuilding(ctx,o,projectIso(o.x+o.w/2,o.y+o.h/2),(o.w+o.h)*ISO.tileWidth/2+20)){signBoard(ctx,o,atlasBuildingHeight(o,(o.w+o.h)*ISO.tileWidth/2+20)-12,count);return;}
  const z=62,base=quad(o.x,o.y,o.w,o.h),top=quad(o.x,o.y,o.w,o.h,z);
  poly(ctx,[top[1],top[2],base[2],base[1]],'#c4cbbf','#718b8d');poly(ctx,[top[2],top[3],base[3],base[2]],'#eae3ce','#a9ac98');
  const styles={tv:['#a94b71','#e47990'],radar:['#487fa3','#6bb7c8'],office:['#7a66aa','#b5a0d4'],media:['#bc754e','#eab074'],chat:['#58a09d','#8bcfc0']};
@@ -115,7 +115,7 @@ function drawHouse(ctx,o){
 }
 const SERVICE_STYLES={cityhall:{walls:['#d6c9b3','#f2e9d5'],roof:['#62558c','#a08fbb'],label:'PREFEITURA',symbol:'★'},library:{walls:['#cfb99e','#f8dfbb'],roof:['#795b9e','#c5a3dd'],label:'BIBLIOTECA',symbol:'▤'},university:{walls:['#c6d6d3','#e8f5dc'],roof:['#547fa4','#91bfd7'],label:'UNIVERSIDADE',symbol:'✦'},police:{walls:['#afc4d8','#e6f0ee'],roof:['#405f9e','#8ab5e1'],label:'POLÍCIA',symbol:'◆'},talents:{walls:['#d7c4d7','#f8e1e4'],roof:['#a35c92','#e3a1c8'],label:'TALENTOS',symbol:'✧'}};
 function drawService(ctx,o){
- if(drawAtlasBuilding(ctx,o,projectIso(o.x+o.w/2,o.y+o.h/2),(o.w+o.h)*ISO.tileWidth/2+20)){signBoard(ctx,o,115,false);return;}
+ if(drawAtlasBuilding(ctx,o,projectIso(o.x+o.w/2,o.y+o.h/2),(o.w+o.h)*ISO.tileWidth/2+20)){signBoard(ctx,o,atlasBuildingHeight(o,(o.w+o.h)*ISO.tileWidth/2+20)-12,false);return;}
  const style=SERVICE_STYLES[o.service]||SERVICE_STYLES.cityhall,z=77,f=quad(o.x,o.y,o.w,o.h),r=quad(o.x,o.y,o.w,o.h,z);
  poly(ctx,[r[1],r[2],f[2],f[1]],style.walls[0],'#7d7985');poly(ctx,[r[2],r[3],f[3],f[2]],style.walls[1],'#8c8a8b');decorativeRoof(ctx,o,z,...style.roof,'#544b6c');
  wallWindows(ctx,f[1],f[2],z,Math.max(2,Math.floor(o.h/1.4)),'#b5e7ed');wallWindows(ctx,f[3],f[2],z,Math.max(2,Math.floor(o.w/1.4)),'#b2dcea');frontDoor(ctx,o,z,'#547c9e');

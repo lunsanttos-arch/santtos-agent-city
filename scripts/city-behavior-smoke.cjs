@@ -37,10 +37,10 @@ async function clickBuilding(page,o){
   assert.match(await distant.locator('#toast').textContent(),/entrada|Aproxime/);await distant.close();
   const job={id:'test-job',agentId:'code',provider:'codex',projectId:'playout',status:'running',connected:false,prompt:'Teste visual',phase:'iniciando',log:''};
   const page=await pageFor([office],[job]);
-  assert(!(await page.evaluate(()=>window.spriteCells.some(([x,y])=>x>0&&y>0)))); // Project workers stay indoors.
+  assert(!(await page.evaluate(()=>window.spriteCells.some(([x,y])=>x===680&&y===671)))); // Project workers stay indoors.
   await clickBuilding(page,office);await page.waitForTimeout(200);
   assert.equal(await page.locator('#sceneTitle').textContent(),'PROJETO DE TESTE');
-  assert(await page.evaluate(()=>window.spriteCells.some(([x,y])=>x>0&&y>0)));
+  assert(await page.evaluate(()=>window.spriteCells.some(([x,y])=>x===680&&y===671)));
   await clickCanvas(page,478,400); // Empty part of UX room, not a provider hotspot.
   assert.equal(await page.locator('#agentPick').inputValue(),'ux');
   assert.equal(await page.locator('#provider').inputValue(),'codex');

@@ -12,7 +12,7 @@ const {chromium} = require('playwright');
     await page.waitForFunction(() => document.getElementById('cursorInfo').textContent === '68 × 52');
     await page.waitForTimeout(500);
     assert.deepEqual(errors, []);
-    const asset = await page.request.get('http://127.0.0.1:4317/assets/city-atlas.png');
+    const asset = await page.request.get('http://127.0.0.1:4317/assets/building-atlas.png');
     assert.equal(asset.status(), 200);
     assert.equal(asset.headers()['content-type'], 'image/png');
     await page.evaluate(() => {
