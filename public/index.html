@@ -1,14 +1,14 @@
 <!doctype html>
 <html lang="pt-BR"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SanTTos Agent City • Isometric Edition</title>
+<title>SanTTos Agent City • Isometric City v0.4</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
 </head><body>
 <header class="topbar">
-  <div class="brand"><div class="brand-glyph">S</div><div><b>SanTTos <em>AGENT CITY</em></b><small>ISOMETRIC / v0.3</small></div></div>
+  <div class="brand"><div class="brand-glyph">S</div><div><b>SanTTos <em>AGENT CITY</em></b><small>ISOMETRIC / v0.4</small></div></div>
   <div class="topcenter"><span class="light"></span><span id="githubTopStatus">GITHUB NÃO CONECTADO</span><i></i><span id="counterBuildings">05 PRÉDIOS</span><i></i><span id="counterMissions">00 MISSÕES</span></div>
-  <div class="actions"><button id="btnWorld" class="navbtn active">◈ CIDADE</button><button id="btnEditor" class="navbtn">✎ CONSTRUIR</button></div>
+  <div class="actions"><button id="btnProjects" class="navbtn">▣ PROJETOS</button><button id="btnServices" class="navbtn">♛ INSTITUIÇÕES</button><button id="btnManagement" class="navbtn">☰ MISSÕES</button><button id="btnWorld" class="navbtn active">◈ CIDADE</button><button id="btnEditor" class="navbtn">✎ CONSTRUIR</button></div>
 </header>
 <div class="layout">
  <aside class="left-panel">
@@ -26,8 +26,8 @@
   <div class="game-bottom"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Mover personagem</span><span><kbd>CLIQUE</kbd> Entrar / construir</span><span><kbd>ESC</kbd> Sair</span><span class="fps" id="currentScene">MAPA 01</span></div>
  </main>
  <aside class="right-panel">
-  <div id="editorPane" class="side-pane hidden"><div class="section-title">✎ EDITOR DE CIDADE <span class="s-tiny">LIVE</span></div><p class="hint">Escolhe um item e clica no terreno. O mapa é salvo localmente; cada projeto utiliza um repositório do GitHub.</p><div id="tools" class="tool-grid"></div><div class="side-subtitle">EDITAR CONSTRUÇÃO</div><div class="tool-row"><button id="toolSelect" class="actionbtn">◈ Selecionar</button><button id="toolMove" class="actionbtn">⇄ Mover</button><button id="toolErase" class="actionbtn danger">✕ Apagar</button></div><p id="editorHelp" class="hint">Escolhe uma ferramenta.</p><div class="notice">DICA: ruas e caminhos podem ser pintados arrastando o mouse. Prédios e casas são posicionados com um clique.</div></div>
-  <div id="inspectorPane" class="side-pane">
+  <div id="editorPane" class="side-pane hidden"><button id="closePanel" class="panel-close" type="button" aria-label="Fechar painel">✕</button><div class="section-title">✎ EDITOR DE CIDADE <span class="s-tiny">LIVE</span></div><p class="hint">Escolhe um item e clica no terreno. O mapa é salvo localmente; cada projeto utiliza um repositório do GitHub.</p><div id="tools" class="tool-grid"></div><div class="side-subtitle">EDITAR CONSTRUÇÃO</div><div class="tool-row"><button id="toolSelect" class="actionbtn">◈ Selecionar</button><button id="toolMove" class="actionbtn">⇄ Mover</button><button id="toolErase" class="actionbtn danger">✕ Apagar</button></div><p id="editorHelp" class="hint">Escolhe uma ferramenta.</p><div class="notice">DICA: ruas e caminhos podem ser pintados arrastando o mouse. Prédios e casas são posicionados com um clique.</div></div>
+  <div id="inspectorPane" class="side-pane"><button class="panel-close" type="button" aria-label="Fechar painel">✕</button>
    <div class="section-title">◈ CENTRO DE OPERAÇÕES <span class="s-tiny">LIVE</span></div>
    <div class="side-heading"><div class="illustration">⌂</div><h2 id="infoName">Bem-vindo à cidade!</h2><p id="infoSubtitle">Escolha um prédio para entrar e iniciar uma missão real com IA.</p></div>
    <div id="projectControls" class="hidden"><div class="side-subtitle">GITHUB • PROJETO</div><label class="field">REPOSITÓRIO DO GITHUB<select id="projectRepo"><option value="">Conecte o GitHub primeiro</option></select></label><div class="github-actions"><button id="reloadRepos" class="actionbtn">↻ ATUALIZAR REPOS</button><button id="saveRepo" class="actionbtn primary">VINCULAR</button></div><p id="githubHelp" class="hint">Autentica com o GitHub CLI: <code>gh auth login</code>. Não precisas escolher nenhuma pasta do PC.</p></div>
@@ -36,6 +36,7 @@
   <div class="task-section"><div class="section-title">◷ MISSÕES <span class="s-tiny" id="jobCount">00</span></div><div id="jobList" class="job-list"><p class="empty">Nenhuma missão criada.</p></div></div>
  </aside>
 </div>
+<div id="serviceModal" class="modal-wrap hidden" role="dialog" aria-modal="true"><div class="civic-window"><button id="closeService" class="service-close" aria-label="Fechar">✕</button><div id="serviceContent"></div></div></div>
 <div id="confirmModal" class="modal-wrap hidden"><div class="modal"><div class="modal-head">◈ ADICIONAR CONSTRUÇÃO</div><label class="field">NOME<input id="newObjectName" maxlength="45"></label><p class="hint">Uma construção pode representar um novo projeto para os agentes.</p><div class="modal-buttons"><button id="cancelAdd" class="actionbtn">CANCELAR</button><button id="confirmAdd" class="actionbtn primary">CONSTRUIR</button></div></div></div>
 <script type="module" src="/app.js"></script>
 </body></html>

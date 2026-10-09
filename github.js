@@ -24,8 +24,7 @@ function lookupGithubRepo(name){
   const r=JSON.parse(invoke('gh',['api',`repos/${full}`],{timeout:14000}));
   if(r.full_name?.toLowerCase()!==full.toLowerCase())throw Error('Repositório não encontrado');
   if(r.archived || r.disabled)throw Error('Repositório arquivado ou desativado');
-  if(!r.permissions?.push)throw Error('É necessário acesso de escrita ao repositório para publicar um PR');
-  return {name:r.full_name,branch:r.default_branch||'main',url:r.html_url};
+  return {name:r.full_name,branch:r.default_branch||'main',url:r.html_url,canPush:!!r.permissions?.push};
 }
 function cloneForJob(repo, id){
   checkedRepo(repo.name);
@@ -42,7 +41,7 @@ function hasChanges(dir){return !!invoke('git',['status','--porcelain'],{cwd:dir
 function diffSummary(dir){return invoke('git',['diff','--stat'],{cwd:dir})+'\n'+invoke('git',['status','--short'],{cwd:dir});}
 function publishPR(j,repo){
   if(!j.workDir||!fs.existsSync(j.workDir))throw Error('Workspace temporário da missão não encontrado');
-  const dir=j.workDir; if(!hasChanges(dir))throw Error('A missão não modificou arquivos');
+  const dir=j.workDir; if(repo.canPush===false)throw Error('Sem permissão de escrita. Fork o repositório para criar um PR.'); if(!hasChanges(dir))throw Error('A missão não modificou arquivos');
   const branch='santtos-agent/'+j.id.slice(0,8);
   invoke('git',['checkout','-b',branch],{cwd:dir});
   invoke('git',['add','-A'],{cwd:dir});

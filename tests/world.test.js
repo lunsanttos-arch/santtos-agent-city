@@ -1,8 +1,8 @@
 const test=require('node:test');const assert=require('node:assert/strict');
 const {createWorld,editWorld,intersects}=require('../world');
-test('inicializa cidade com cinco predios e mapa 40x27',()=>{
- const world=createWorld();assert.equal(world.terrain.length,27);assert.equal(world.terrain[0].length,40);
- assert.equal(world.objects.filter(x=>x.kind==='office').length,5);
+test('inicializa cidade expandida com cinco predios e cinco serviços',()=>{
+ const world=createWorld();assert.equal(world.terrain.length,52);assert.equal(world.terrain[0].length,68);
+ assert.equal(world.objects.filter(x=>x.kind==='office').length,5); assert.equal(world.objects.filter(x=>x.kind==='service').length,5);
 });
 test('construcao, ruas, mover e apagar persistem no objeto do mapa',()=>{
  const world=createWorld();let r=world.revision;editWorld(world,{revision:r,x:0,y:0,tool:'road'});assert.equal(world.terrain[0][0],'road');
@@ -12,13 +12,19 @@ test('construcao, ruas, mover e apagar persistem no objeto do mapa',()=>{
  editWorld(world,{revision:world.revision,x:0,y:19,tool:'erase'});assert(!world.objects.some(x=>x.id===house.id));
 });
 test('predio novo recebe projeto e rejeita colisao e revisao obsoleta',()=>{
- const world=createWorld();const revision=world.revision;editWorld(world,{revision,x:0,y:14,tool:'office',name:'SanTTos AI Lab'});
+ const world=createWorld();const revision=world.revision;editWorld(world,{revision,x:23,y:45,tool:'office',name:'SanTTos AI Lab'});
  const lab=world.objects.find(o=>o.name==='SanTTos AI Lab');assert(lab.projectId.startsWith('projeto-'));
  assert.throws(()=>editWorld(world,{revision,x:1,y:1,tool:'road'}),/alterado/);
- assert.throws(()=>editWorld(world,{revision:world.revision,x:0,y:14,tool:'house'}),/ocupada/);
+ assert.throws(()=>editWorld(world,{revision:world.revision,x:23,y:45,tool:'house'}),/ocupada/);
 });
 test('coordenadas malformadas e objetos fora do mapa sao bloqueados',()=>{
- const world=createWorld();assert.throws(()=>editWorld(world,{revision:world.revision,x:38,y:26,tool:'office'}),/fora/);
+ const world=createWorld();assert.throws(()=>editWorld(world,{revision:world.revision,x:66,y:50,tool:'office'}),/fora/);
  assert.throws(()=>editWorld(world,{revision:world.revision,x:1.1,y:1,tool:'road'}),/inválida/);
  assert.equal(intersects({x:1,y:1,w:2,h:2},{x:3,y:3,w:2,h:2}),false);
+});
+
+test('serviços públicos são preservados e podem ser movidos',()=>{
+ const w=createWorld();const hall=w.objects.find(o=>o.service==='cityhall');
+ assert.throws(()=>editWorld(w,{revision:w.revision,tool:'erase',x:hall.x,y:hall.y}),/essencial/);
+ assert.equal(w.w,68);assert.equal(w.h,52);
 });

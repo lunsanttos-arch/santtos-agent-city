@@ -1,11 +1,12 @@
 import {projectIso,unprojectIso,hitIsoObject,renderIsometric} from './isometric.js';
+import {openService,showServiceDirectory} from './institutions.js';
 const $=id=>document.getElementById(id);
 const canvas=$('world'),ctx=canvas.getContext('2d',{alpha:false});ctx.imageSmoothingEnabled=false;
-const TILE=24,W=40,H=27;
+const TILE=24,W=68,H=52;
 const PROVIDER_INFO={codex:{label:'Codex',color:'#74d4ff'},claude:{label:'Claude',color:'#e9a47d'},gemini:{label:'Gemini',color:'#b6a6ff'},ollama:{label:'Ollama',color:'#77eab1'},manus:{label:'Manus',color:'#f8d779'}};
 const TOOLS=[['road','🛣️','Rua'],['path','🟨','Caminho'],['grass','🌱','Grama'],['water','💧','Água'],['office','🏢','Prédio'],['house','🏠','Casa'],['tree','🌳','Árvore'],['flower','🌷','Flores'],['lamp','💡','Poste'],['fountain','⛲','Praça']];
-let store={world:{objects:[],terrain:[],revision:0},jobs:[],connections:{}},scene='city',editing=false,selectedProject=null,tool='road',selectedObj=null,moveId=null,hover=null,pendingTile=null,drawer=false,painting=false,lastPaint='',busy=false;
-const player={x:19.5,y:12.5,facing:'down',walking:false,frame:0};let cityPlayer={x:19.5,y:12.5};
+let store={world:{objects:[],terrain:[],revision:0},jobs:[],connections:{localCli:[]}},scene='city',editing=false,selectedProject=null,tool='road',selectedObj=null,moveId=null,hover=null,pendingTile=null,drawer=false,painting=false,lastPaint='',busy=false;
+const player={x:34.5,y:28.5,facing:'down',walking:false,frame:0};let cityPlayer={x:34.5,y:28.5};const camera={cx:0,cy:0,zoom:1.16,ready:false};
 const providers={}; // Nunca renderizar agentes fictícios ou slots desconectados.
 const jobAvatars=new Map();
 let githubRepos=[];let toastTimer;
@@ -13,7 +14,7 @@ function toast(text){$('toast').textContent=text;$('toast').classList.remove('hi
 async function api(endpoint,body){const res=await fetch('/api/'+endpoint,{method:body?'POST':'GET',headers:{...(body?{'content-type':'application/json','x-santtos-city':'1'}:{})},body:body?JSON.stringify(body):undefined});const data=await res.json();if(!res.ok)throw Error(data.error||`HTTP ${res.status}`);return data;}
 async function refresh(){try{const next=await api('state');const oldRev=store.world.revision;store=next;if(oldRev!==next.world.revision){listProjects();if(selectedProject)drawInspector();}renderJobs();$('manusStatus').textContent=next.connections.manus?'● CONFIGURADO':'○ SEM CHAVE';$('manusStatus').style.color=next.connections.manus?'#82ebb2':'#9f91a6';$('githubTopStatus').textContent=next.connections.github?'GITHUB CONECTADO':'GITHUB NÃO CONECTADO';for(const [id,el] of [['codex','statusCodex'],['claude','statusClaude'],['gemini','statusGemini'],['ollama','statusOllama']]){const connected=id==='ollama'?next.connections.ollama:next.connections.localCli.includes(id);$(el).textContent=connected?(id==='ollama'?'● ONLINE':'● CLI INSTALADO'):'○ OFFLINE';$(el).style.color=connected?'#82ebb2':'#a08ba6'}$('counterBuildings').textContent=String(next.world.objects.filter(x=>x.kind==='office').length).padStart(2,'0')+' PRÉDIOS';$('counterMissions').textContent=String(next.jobs.length).padStart(2,'0')+' MISSÕES';}catch(e){toast('Erro de conexão: '+e.message);}}
 const projects=()=>store.world.objects.filter(x=>x.kind==='office');
-function chooseProject(p,enter=true){selectedProject=p.projectId;selectedObj=p.id;if(enter){if(scene==='city')cityPlayer={x:player.x,y:player.y};player.x=19.5;player.y=12.5;scene='office';editing=false;$('btnEditor').classList.remove('active');$('btnWorld').classList.add('active');$('editorPane').classList.add('hidden');$('inspectorPane').classList.remove('hidden');}
+function chooseProject(p,enter=true){selectedProject=p.projectId;selectedObj=p.id;if(enter){openInspector();if(scene==='city')cityPlayer={x:player.x,y:player.y};player.x=19.5;player.y=12.5;scene='office';editing=false;$('btnEditor').classList.remove('active');$('btnWorld').classList.add('active');$('editorPane').classList.add('hidden');$('inspectorPane').classList.remove('hidden');}
  drawInspector();renderJobs();updateSceneLabels();listProjects();}
 function listProjects(){const root=$('projectList');root.replaceChildren();projects().forEach((p,i)=>{const b=document.createElement('button');b.className='project-entry'+(selectedProject===p.projectId?' active':'');const icon=document.createElement('span');icon.className='mini-icon';icon.textContent=['▣','◈','⌘','▤','◎'][i%5];const txt=document.createElement('span');const title=document.createElement('strong');title.textContent=p.name;const sub=document.createElement('small');sub.textContent=`${store.jobs.filter(j=>j.projectId===p.projectId&&j.status==='running').length} AGENTES TRABALHANDO`;if(p.github?.name)sub.textContent=(p.github.name+' · '+sub.textContent);else sub.textContent='SEM REPOSITÓRIO • VINCULE AO GITHUB';txt.append(title,sub);b.append(icon,txt);b.onclick=()=>chooseProject(p,true);root.append(b)});$('projectCount').textContent=String(projects().length).padStart(2,'0')}
 function drawInspector(){const p=projects().find(x=>x.projectId===selectedProject);$('projectControls').classList.toggle('hidden',!p);$('missionControls').classList.toggle('hidden',!p);$('infoName').textContent=p?p.name:'Bem-vindo à cidade!';$('infoSubtitle').textContent=p?'Escritório de agentes • Cria missões e acompanha o trabalho em tempo real.':'Clique em um prédio no mapa para entrar no escritório, ou use o modo Construir.';if(p){updateRepoSelect(p.github?.name||'');$('githubHelp').textContent=p.github?.name?`Vinculado a ${p.github.name} (${p.github.branch}). Missões Codex/Claude/Gemini rodam em clone temporário.`:'Selecione um repositório da tua conta GitHub. Use gh auth login uma vez no Windows.';}}
@@ -28,12 +29,13 @@ function button(text,handler){const b=document.createElement('button');b.classNa
 async function runAction(ep,body){try{await api(ep,body);await refresh();toast('Alteração salva!')}catch(e){toast(e.message)}}
 function makeTools(){const root=$('tools');TOOLS.forEach(([id,emoji,name])=>{const b=document.createElement('button');b.className='tool'+(tool===id?' selected':'');b.dataset.tool=id;const pic=document.createElement('span');pic.className='pict';pic.textContent=emoji;const txt=document.createElement('span');txt.textContent=name;b.append(pic,txt);b.onclick=()=>chooseTool(id);root.append(b)});}
 function chooseTool(id){tool=id;moveId=null;document.querySelectorAll('.tool').forEach(n=>n.classList.toggle('selected',n.dataset.tool===tool));$('editorHelp').textContent=({road:'Pinte ruas arrastando pelo mapa.',house:'Clique num terreno livre para adicionar uma casa.',office:'Clique num espaço livre para cadastrar prédio e projeto.',erase:'Clique sobre algo para apagar.',move:'Clique no prédio, depois na nova posição.',select:'Clique para selecionar uma construção.'})[id]||'Clique no mapa para posicionar este item.';}
-function toggleEditor(){editing=!editing;scene='city';$('btnEditor').classList.toggle('active',editing);$('btnWorld').classList.toggle('active',!editing);$('editorPane').classList.toggle('hidden',!editing);$('inspectorPane').classList.toggle('hidden',editing);updateSceneLabels();}
-function updateSceneLabels(){const p=projects().find(x=>x.projectId===selectedProject);$('sceneTitle').textContent=scene==='city'?'CIDADE SANTTOS':scene==='house'?'INTERIOR DA CASA':(p?.name||'ESCRITÓRIO').toUpperCase();$('mapLocation').textContent=scene==='city'?'VILA DOS AGENTES':scene==='house'?'RESIDÊNCIA':'ESCRITÓRIO '+(p?.name||'');$('currentScene').textContent=scene==='city'?'MAPA 01':'INTERIOR';$('editLabel').textContent=editing?'✎ MODO CONSTRUIR':'● EXPLORANDO';$('editLabel').classList.toggle('edit',editing);$('cursorInfo').textContent='40 × 27';}
-const tileFromEvent=e=>{const r=canvas.getBoundingClientRect();return unprojectIso((e.clientX-r.left)*960/r.width,(e.clientY-r.top)*648/r.height)};
-const isometricHit=e=>{const r=canvas.getBoundingClientRect();return hitIsoObject(store.world.objects,(e.clientX-r.left)*960/r.width,(e.clientY-r.top)*648/r.height)};
+function toggleEditor(){editing=!editing;if(editing)openInspector();scene='city';$('btnEditor').classList.toggle('active',editing);$('btnWorld').classList.toggle('active',!editing);$('editorPane').classList.toggle('hidden',!editing);$('inspectorPane').classList.toggle('hidden',editing);updateSceneLabels();}
+function updateSceneLabels(){const p=projects().find(x=>x.projectId===selectedProject);$('sceneTitle').textContent=scene==='city'?'CIDADE SANTTOS':scene==='house'?'INTERIOR DA CASA':(p?.name||'ESCRITÓRIO').toUpperCase();$('mapLocation').textContent=scene==='city'?'VILA DOS AGENTES':scene==='house'?'RESIDÊNCIA':'ESCRITÓRIO '+(p?.name||'');$('currentScene').textContent=scene==='city'?'MAPA 01':'INTERIOR';$('editLabel').textContent=editing?'✎ MODO CONSTRUIR':'● EXPLORANDO';$('editLabel').classList.toggle('edit',editing);$('cursorInfo').textContent=store.world.w+' × '+store.world.h;}
+const toIsoScreen=e=>{const r=canvas.getBoundingClientRect();return {x:((e.clientX-r.left)*960/r.width-480)/camera.zoom+camera.cx,y:((e.clientY-r.top)*648/r.height-324)/camera.zoom+camera.cy}};
+const tileFromEvent=e=>{const p=toIsoScreen(e);return unprojectIso(p.x,p.y)};
+const isometricHit=e=>{const p=toIsoScreen(e);return hitIsoObject(store.world.objects,p.x,p.y)};
 const objectAt=(x,y)=>store.world.objects.find(o=>x>=o.x&&x<o.x+o.w&&y>=o.y&&y<o.y+o.h);
-function onWorldClick(x,y,e){const obj=(e?isometricHit(e):null)||objectAt(x,y);if(obj?.kind==='office')chooseProject(obj,true);else if(obj?.kind==='house'){selectedObj=obj.id;cityPlayer={x:player.x,y:player.y};player.x=19.5;player.y=12.5;scene='house';editing=false;updateSceneLabels();toast('Entraste na casa: '+(obj.name||'Casa'));}else if(obj?.kind==='fountain')toast('Bem-vindo à praça da SanTTos!');else if(!obj)toast('Use WASD para andar pela cidade.');}
+function onWorldClick(x,y,e){const obj=(e?isometricHit(e):null)||objectAt(x,y);if(obj?.kind==='service')openService(obj,{api,store,toast,projects,chooseProject});else if(obj?.kind==='office')chooseProject(obj,true);else if(obj?.kind==='house'){selectedObj=obj.id;cityPlayer={x:player.x,y:player.y};player.x=19.5;player.y=12.5;scene='house';editing=false;updateSceneLabels();toast('Entraste na casa: '+(obj.name||'Casa'));}else if(obj?.kind==='fountain')toast('Bem-vindo à praça da SanTTos!');else if(!obj)toast('Use WASD para andar pela cidade.');}
 async function editAt(x,y){if(busy||!editing||x<0||y<0||x>=W||y>=H)return;const obj=objectAt(x,y);
  if(tool==='select'){selectedObj=obj?.id||null;toast(obj?`${obj.name||obj.kind} selecionado`:'Nenhum objeto nesta posição');return;}
  if(tool==='move'){if(!moveId){if(!obj)return toast('Clique numa construção primeiro');moveId=obj.id;toast('Agora clica onde quer mover a construção');return;}try{busy=true;const v=await api('map/edit',{tool:'move',x,y,id:moveId,revision:store.world.revision});store.world=v.world;listProjects();moveId=null;toast('Construção movida');}catch(e){toast(e.message)}finally{busy=false}return;}
@@ -63,7 +65,7 @@ function pathTo(sx,sy,tx,ty){
   return result.reverse();
 }
 function updateProviders(dt,time){
- const active=store.jobs.filter(j=>j.connected&&['running','waiting'].includes(j.status));
+ const active=store.jobs.filter(j=>j.connected&&(['running','waiting'].includes(j.status)||(j.status==='completed'&&Date.now()-j.updated<300000)));
  for(const [id,a] of Object.entries(providers)){
   const i=Object.keys(providers).indexOf(id),waypoints=[[18,12],[20,12],[22,12],[22,9],[20,9],[18,9],[16,9],[16,12]];
   const idleGoal=waypoints[(Math.floor(time/6500)+i*2)%waypoints.length],tx=idleGoal[0],ty=idleGoal[1];
@@ -72,10 +74,10 @@ function updateProviders(dt,time){
   if(a.path.length){const next=a.path[0];walkProvider(a,next,dt);if(Math.hypot(next.x-a.x,next.y-a.y)<.11)a.path.shift();}
  }
  for(const j of active){
-   if(!jobAvatars.has(j.id))jobAvatars.set(j.id,{id:j.provider,x:19.5,y:12.5,dir:'down',path:[],target:'',last:0});
+   if(!jobAvatars.has(j.id))jobAvatars.set(j.id,{id:j.provider,x:34.5,y:28.5,dir:'down',path:[],target:'',last:0});
    const a=jobAvatars.get(j.id),b=projects().find(p=>p.projectId===j.projectId);
    if(!b)continue;
-   const tx=b.x+Math.floor(b.w/2),ty=b.y+b.h,targetKey=tx+','+ty;
+   const house=store.world.objects.find(o=>o.kind==='house');const resting=j.status==='completed'&&house;const tx=resting?house.x+house.w: b.x+Math.floor(b.w/2),ty=resting?house.y+house.h:b.y+b.h,targetKey=tx+','+ty;
    if(a.target!==targetKey){a.target=targetKey;a.path=pathTo(a.x,a.y,tx,ty);}
    if(a.path.length){const next=a.path[0];walkProvider(a,next,dt);if(Math.hypot(next.x-a.x,next.y-a.y)<.11)a.path.shift();}
  }
@@ -103,7 +105,17 @@ function drawFountain(o){let x=o.x*TILE,y=o.y*TILE;pixel(x+3,y+20,68,50,'#d9caa6
 function drawDecor(o){const x=o.x*TILE,y=o.y*TILE;if(o.kind==='tree'){drawTree(x-3,y-14,1);}else if(o.kind==='flower'){pixel(x+10,y+10,3,12,'#427d4f');pixel(x+4,y+7,8,6,'#f888ad');pixel(x+10,y+3,7,6,'#f5dc8e');pixel(x+15,y+9,8,6,'#d8a3ff')}else if(o.kind==='lamp'){pixel(x+11,y+2,3,20,'#57637c');pixel(x+7,y-3,10,10,'#fff2c8');pixel(x+9,y-1,6,6,'#fffaa9')}else if(o.kind==='house')drawHouse(o);else if(o.kind==='office')drawBuilding(o);else if(o.kind==='fountain')drawFountain(o)}
 function drawPerson(cx,cy,color,dir='down',walk=0,scale=1){const x=Math.round(cx),y=Math.round(cy);const u=scale;pixel(x-8*u,y+9*u,16*u,4*u,'#3b4b5966');pixel(x-5*u,y-5*u,10*u,5*u,'#3d2d45');pixel(x-6*u,y-3*u,12*u,8*u,'#e8b48e');if(dir==='up')pixel(x-5*u,y-2*u,10*u,5*u,'#55394e');else{pixel(x-4*u,y,2*u,2*u,'#3d3546');pixel(x+2*u,y,2*u,2*u,'#3d3546')}
  pixel(x-6*u,y+5*u,12*u,11*u,color);pixel(x-9*u,y+6*u,3*u,7*u,'#ecb48e');pixel(x+6*u,y+6*u,3*u,7*u,'#ecb48e');const step=Math.floor(walk)%2;if(step===0){pixel(x-5*u,y+16*u,4*u,7*u,'#383658');pixel(x+1*u,y+16*u,4*u,7*u,'#353753')}else{pixel(x-6*u,y+16*u,4*u,7*u,'#383658');pixel(x+3*u,y+14*u,4*u,8*u,'#353753')}pixel(x-7*u,y+19*u,5*u,3*u,'#292437');pixel(x+1*u,y+19*u,6*u,3*u,'#292437');}
-function drawWorld(time){renderIsometric(ctx,{terrain:store.world.terrain,objects:store.world.objects,jobs:store.jobs,avatars:[...jobAvatars].map(([id,a])=>({...a,job:store.jobs.find(j=>j.id===id),color:PROVIDER_INFO[a.id]?.color||'#d5c2ff',frame:a.last})).filter(a=>a.job),player,hover,editing,tool,time,drawPerson});}
+function drawWorld(time){
+ const center=projectIso(player.x,player.y);
+ if(!camera.ready){camera.cx=center.x;camera.cy=center.y;camera.ready=true;}
+ camera.cx+=(center.x-camera.cx)*.055;camera.cy+=(center.y-camera.cy)*.055;
+ ctx.fillStyle='#78b66e';ctx.fillRect(0,0,960,648);
+ ctx.save();ctx.translate(480,324);ctx.scale(camera.zoom,camera.zoom);ctx.translate(-camera.cx,-camera.cy);
+ renderIsometric(ctx,{terrain:store.world.terrain,objects:store.world.objects,jobs:store.jobs,avatars:[...jobAvatars].map(([id,a])=>({...a,job:store.jobs.find(j=>j.id===id),color:PROVIDER_INFO[a.id]?.color||'#d5c2ff',frame:a.last})).filter(a=>a.job),player,hover,editing,tool,time,drawPerson,camera});
+ ctx.restore();
+ ctx.fillStyle='#1c2c2bc9';ctx.fillRect(710,600,220,28);ctx.fillStyle='#fffbe6';ctx.font='bold 12px monospace';ctx.textAlign='center';
+ ctx.fillText(store.jobs.filter(j=>j.connected&&['running','waiting'].includes(j.status)).length+' AGENTES ATIVOS',820,619);
+}
 function floor(x,y,w,h,a,b){pixel(x,y,w,h,a);for(let xx=x;xx<x+w;xx+=24)for(let yy=y;yy<y+h;yy+=24)if(((xx+yy)/24)%2===0)pixel(xx+2,yy+2,20,20,b);outline(x,y,w,h,'#575a78',5)}
 function desk(x,y,accent='#79cfff'){pixel(x-46,y-17,92,16,'#665071');pixel(x-44,y-20,89,9,'#bf9876');pixel(x-25,y-35,50,19,'#232b4b');pixel(x-22,y-32,44,13,accent);pixel(x-14,y-29,25,3,'#dff0ff');pixel(x-17,y-7,35,7,'#e8d2bb');pixel(x-12,y+2,25,19,'#5e5a86');pixel(x-9,y+12,19,12,'#414c76');}
 function plant(x,y){pixel(x-8,y,18,12,'#ad7970');pixel(x-5,y+3,12,4,'#734f53');pixel(x-11,y-9,22,13,'#3e9665');pixel(x-6,y-19,13,18,'#58b87a');pixel(x+4,y-13,12,14,'#378558');}
@@ -129,8 +141,18 @@ function drawOffice(time){pixel(0,0,960,648,'#23364a');for(let x=0;x<960;x+=24){
 function drawResidence(time){floor(50,60,860,527,'#ebd9bd','#eee2cc');pixel(320,190,320,100,'#aa7382');pixel(342,212,280,64,'#e6bcc5');pixel(150,140,140,80,'#a67d61');pixel(164,125,116,28,'#83618a');plant(120,230);plant(830,230);bookshelf(620,130);pixel(50,300,860,9,'#a69490');pixel(50,560,860,12,'#9e8a87');label('CASA • SAN✦TTOS',480,50,'#fff','#724ba2','bold 15px monospace');}
 let previous=performance.now();function frame(time){const dt=Math.min(.055,(time-previous)/1000);previous=time;handleKeyboard(dt);updateProviders(dt,time);if(scene==='city')drawWorld(time);else if(scene==='office')drawOffice(time);else drawResidence(time);requestAnimationFrame(frame);}
 function updateModel(){$('modelRow').classList.toggle('hidden',$('provider').value!=='ollama');}
-$('btnWorld').onclick=()=>{if(scene!=='city'){player.x=cityPlayer.x;player.y=cityPlayer.y;}scene='city';editing=false;$('btnEditor').classList.remove('active');$('btnWorld').classList.add('active');$('editorPane').classList.add('hidden');$('inspectorPane').classList.remove('hidden');updateSceneLabels()};
+$('btnWorld').onclick=()=>{hidePanels();if(scene!=='city'){player.x=cityPlayer.x;player.y=cityPlayer.y;}scene='city';editing=false;$('btnEditor').classList.remove('active');$('btnWorld').classList.add('active');$('editorPane').classList.add('hidden');$('inspectorPane').classList.remove('hidden');updateSceneLabels()};
 $('btnEditor').onclick=toggleEditor;
+$('btnProjects').onclick=()=>{hidePanels();document.querySelector('.left-panel').classList.add('open')};
+$('btnManagement').onclick=()=>{openInspector();drawInspector();renderJobs()};
+$('btnServices').onclick=()=>showServiceDirectory(store.world.objects,{api,store,toast,projects,chooseProject});
+$('closeService').onclick=()=>{ $('serviceModal').classList.add('hidden') };
+$('serviceModal').addEventListener('click',e=>{if(e.target===$('serviceModal'))$('closeService').click()});
+document.querySelectorAll('.panel-close').forEach(el=>el.onclick=hidePanels);
+function hidePanels(){document.querySelector('.right-panel').classList.remove('open');document.querySelector('.left-panel').classList.remove('open')}
+function openInspector(){hidePanels();document.querySelector('.right-panel').classList.add('open')}
+canvas.addEventListener('wheel',e=>{if(scene!=='city')return;e.preventDefault();camera.zoom=Math.max(.72,Math.min(2.4,camera.zoom*(e.deltaY<0?1.11:.90)));},{passive:false});
+
 $('toolSelect').onclick=()=>chooseTool('select');$('toolMove').onclick=()=>chooseTool('move');$('toolErase').onclick=()=>chooseTool('erase');
 $('cancelAdd').onclick=()=>{$('confirmModal').classList.add('hidden');pendingTile=null};
 $('confirmAdd').onclick=async()=>{if(!pendingTile)return;const {tool,x,y}=pendingTile;const name=$('newObjectName').value;pendingTile=null;$('confirmModal').classList.add('hidden');try{const v=await api('map/edit',{tool,x,y,name,revision:store.world.revision});store.world=v.world;listProjects();toast(tool==='house'?'Casa construída!':'Prédio criado — pronto para receber um projeto!');}catch(e){toast(e.message)}};
@@ -141,6 +163,6 @@ $('saveRepo').onclick=async()=>{if(!selectedProject)return;const repo=$('project
 $('createMission').onclick=async()=>{if(!selectedProject)return;const provider=$('provider').value,prompt=$('prompt').value,model=$('model').value;if(prompt.trim().length<4)return toast('Descreva uma missão primeiro');try{await api('job',{projectId:selectedProject,provider,prompt,model});$('prompt').value='';await refresh();toast('Missão criada: aprove antes de executar!');}catch(e){toast(e.message)}};
 $('provider').onchange=updateModel;
 canvas.onpointerdown=onCanvasDown;canvas.onpointermove=onCanvasMove;window.addEventListener('pointerup',onCanvasUp);canvas.onclick=onCanvasClick;
-window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('confirmModal').classList.contains('hidden')){$('cancelAdd').click();return;}if(scene!=='city'){$('btnWorld').click();return;}}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d'].includes(e.key)&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')){e.preventDefault();keys.add(e.key)}});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('serviceModal').classList.contains('hidden')){$('closeService').click();return;}hidePanels();if(!$('confirmModal').classList.contains('hidden')){$('cancelAdd').click();return;}if(scene!=='city'){$('btnWorld').click();return;}}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d'].includes(e.key)&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')){e.preventDefault();keys.add(e.key)}});
 window.addEventListener('keyup',e=>keys.delete(e.key));window.addEventListener('blur',()=>keys.clear());
 async function boot(){makeTools();updateModel();drawInspector();updateSceneLabels();await refresh();void refreshGithubRepos();requestAnimationFrame(frame);setInterval(refresh,1700)}boot();

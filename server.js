@@ -4,6 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const os=require('node:os');
 const github=require('./github');
+const civic=require('./civic');
 const cp=require('node:child_process');
 const {randomUUID}=require('node:crypto');
 const {createWorld,editWorld}=require('./world');
@@ -19,6 +20,11 @@ loadDotEnv();
 const PORT=Number(process.env.PORT)||4317;
 let world;try{world=JSON.parse(fs.readFileSync(DATA,'utf8'));if(!Array.isArray(world.objects)||!Array.isArray(world.terrain))throw Error('invalid');}catch{world=createWorld();}
 // Migração: nunca utilizar caminhos de projetos persistidos pela versão anterior.
+if(world.version!==4 || world.w!==68 || world.h!==52){
+  const previous=world;world=createWorld();
+  for(const p of world.objects.filter(o=>o.kind==='office')){const old=previous.objects.find(o=>o.projectId===p.projectId);if(old?.github)p.github=old.github;}
+  if(fs.existsSync(DATA)){fs.copyFileSync(DATA,DATA+'.v03-backup');}
+}
 for (const o of world.objects) { if(o.kind==='office'){delete o.dir; if(!o.github)o.github=null;} }
 function persist(){fs.mkdirSync(path.dirname(DATA),{recursive:true});const p=DATA+'.tmp';fs.writeFileSync(p,JSON.stringify(world,null,2));fs.renameSync(p,DATA);}
 const jobs=new Map();
@@ -37,7 +43,8 @@ function job(id){const j=jobs.get(id);if(!j)fail(404,'Missão não encontrada');
 function validateGithubProject(p){if(!p.github?.name)fail(422,'Conecte este prédio a um repositório do GitHub.');try{return github.lookupGithubRepo(p.github.name)}catch(e){fail(422,'GitHub: '+e.message)}}
 function abortJob(j){j.cancelled=true;if(j.provider==='manus'&&j.remoteTaskId){void manusRequest('task.stop',{method:'POST',body:{task_id:j.remoteTaskId}}).catch(e=>pushLog(j,'Não foi possível parar a tarefa Manus remotamente: '+e.message+'\n'));}if(j.abortController)j.abortController.abort();if(j.child){try{if(process.platform==='win32'){cp.spawn('taskkill',['/PID',String(j.child.pid),'/T','/F'],{windowsHide:true});}else j.child.kill('SIGTERM');}catch{}}}
 function commandFor(j){
-  const instruction='Trabalhe somente na pasta deste projeto. Não execute deploy, push ou commit. Não manipule segredos. Faça uma mudança limitada e relatório de testes. Tarefa: '+j.prompt;
+  const lesson=civic.lessonContext('desenvolvimento');
+  const instruction='Trabalhe somente na pasta deste projeto. Não execute deploy, push ou commit. Não manipule segredos. Faça uma mudança limitada e relatório de testes. Contexto de habilidades: '+lesson+'\nTarefa: '+j.prompt;
   if(j.provider==='codex')return ['codex',['exec','--sandbox','workspace-write',instruction]];
   if(j.provider==='claude')return ['claude',['-p','--permission-mode','acceptEdits',instruction]];
   return ['gemini',['-p',instruction,'--approval-mode','auto_edit']];
@@ -131,12 +138,26 @@ function createApp(){return http.createServer(async(req,res)=>{
     const url=new URL(req.url,'http://localhost');
     if(req.method==='GET'&&url.pathname==='/api/state')return send(res,200,state());
     if(req.method==='GET'&&url.pathname==='/api/health')return send(res,200,{ok:true});
+    if(req.method==='GET'&&url.pathname==='/api/civic')return send(res,200,civic.all());
+    if(req.method==='GET'&&url.pathname==='/api/library/search'){
+      const q=String(url.searchParams.get('q')||'').trim().slice(0,120);
+      if(q.length<2)fail(400,'Pesquise pelo menos dois caracteres');
+      try{
+        const endpoint=new URL('https://api.github.com/search/repositories');endpoint.searchParams.set('q',q);endpoint.searchParams.set('per_page','12');
+        const response=await fetch(endpoint,{headers:{'Accept':'application/vnd.github+json','User-Agent':'SanTTos-Agent-City'},signal:AbortSignal.timeout(7000)});
+        if(!response.ok)fail(503,'GitHub indisponível ou limite da API atingido');
+        const result=await response.json();return send(res,200,{repos:(result.items||[]).filter(x=>!x.private).slice(0,12).map(x=>({name:x.full_name,description:x.description,stars:x.stargazers_count,branch:x.default_branch,url:x.html_url}))});
+      }catch(e){fail(503,'Busca GitHub indisponível: '+e.message)}
+    }
     if(req.method==='GET'&&url.pathname==='/api/github/repos'){try{return send(res,200,{repos:github.listGithubRepos()});}catch(e){return send(res,503,{error:'Conecte-se ao GitHub com gh auth login: '+e.message});}}
     if(req.method==='POST'&&url.pathname.startsWith('/api/')){
       if(req.headers['x-santtos-city']!=='1')fail(403,'Cabeçalho de segurança ausente');
       if(req.headers.origin && !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.origin))fail(403,'Origem bloqueada');
       if(!(req.headers['content-type']||'').startsWith('application/json'))fail(415,'JSON obrigatório');
       const b=await readJson(req);
+      if(url.pathname==='/api/civic/agent'){try{return send(res,201,{agent:civic.addAgent(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/lesson'){try{return send(res,201,{lesson:civic.addLesson(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/audit'){const j=job(b.id);return send(res,200,{audit:civic.auditJob(j)});}
       if(url.pathname==='/api/map/edit'){try{editWorld(world,b)}catch(e){fail(409,e.message)}persist();return send(res,200,{world});}
       if(url.pathname==='/api/project'){
         const p=project(b.id);
