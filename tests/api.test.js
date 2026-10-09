@@ -32,3 +32,18 @@ test('prefeitura, universidade e agencia de talentos possuem APIs reais',async()
  const civic=await fetch(base+'/api/civic');assert.equal(civic.status,200);const v=await civic.json();assert(Array.isArray(v.agents));
  const bad=await post('/api/civic/agent',{name:'A',provider:'sem-ia',role:'fake'});assert.equal(bad.status,400);
 });
+test('cada projeto possui Gerente e cinco subagentes com provedor configurável por função',async()=>{
+ const state=await(await fetch(base+'/api/state')).json();
+ const civic=await(await fetch(base+'/api/civic')).json();
+ for(const project of state.world.objects.filter(o=>o.kind==='office')){
+  const team=civic.agents.filter(a=>a.projectId===project.projectId&&a.projectRole);
+  assert.equal(team.length,6);const manager=team.find(a=>a.projectRole==='manager');
+  assert(team.filter(a=>a.id!==manager.id).every(a=>a.managerId===manager.id&&a.agentType==='subagent'));
+ }
+ const manager=civic.agents.find(a=>a.projectRole==='manager');
+ const changed=await post('/api/civic/project-agent',{agentId:manager.id,provider:'ollama'});
+ assert.equal(changed.status,200);assert.equal(changed.data.agent.provider,'ollama');
+ await post('/api/civic/project-agent',{agentId:manager.id,provider:manager.provider});
+ const invalid=await post('/api/civic/project-agent',{agentId:manager.id,provider:'fake'});assert.equal(invalid.status,400);
+ const reserved=await post('/api/civic/agent',{provider:'codex',role:'qa',spriteIndex:0});assert.equal(reserved.status,400);
+});

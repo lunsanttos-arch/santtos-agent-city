@@ -24,6 +24,32 @@ async function reviewPublicRepo(repo,fetchImpl=fetch){
 }
 module.exports={scanSource,reviewPublicRepo,validRepo};
 
+// Inspect only files in an approved mission's temporary clone. Never follows symlinks
+// or executes the analyzed code, and stores finding metadata rather than source text.
+function reviewWorkspace(dir){
+ const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+ const root=fs.realpathSync(dir);
+ const listing=cp.spawnSync('git',['ls-files','-z','--cached','--others','--exclude-standard'],{cwd:root,encoding:'utf8',timeout:5000,maxBuffer:1024*1024});
+ if(listing.status!==0)throw Error('Não foi possível listar os arquivos da missão');
+ const files=[...new Set(listing.stdout.split('\0').filter(Boolean))];
+ const findings=[],configs=[];let reviewed=0;
+ for(const filename of files){
+  if(/(^|\/)(node_modules|dist|build|vendor|tests|test|__tests__)\//.test(filename))continue;
+  const source=/\.(js|jsx|ts|tsx|py|sh|go|rs|php|java|rb)$/.test(filename);
+  const config=filename==='package.json'||/^\.github\/workflows\/[^/]+\.ya?ml$/.test(filename);
+  if((!source||reviewed>=MAX_FILES)&&(!config||configs.length>=5))continue;
+  const full=path.resolve(root,filename);
+  if(!full.startsWith(root+path.sep)||!fs.existsSync(full))continue;
+  const stat=fs.lstatSync(full);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>(config?90000:35000))continue;
+  if(!fs.realpathSync(full).startsWith(root+path.sep))continue;
+  const content=fs.readFileSync(full,'utf8');
+  if(source&&reviewed<MAX_FILES){findings.push(...scanSource(content,filename));reviewed++;}
+  if(config&&configs.length<5)configs.push({path:filename,content});
+ }
+ return {filesReviewed:reviewed,findings:findings.slice(0,75),configFiles:configs.length,configFindings:inspectConfigFiles(configs)};
+}
+module.exports.reviewWorkspace=reviewWorkspace;
+
 // Complementary inspection by the second officer: dependencies and GitHub workflows.
 function inspectConfigFiles(files){
  const findings=[];

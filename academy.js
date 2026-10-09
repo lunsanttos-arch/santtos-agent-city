@@ -72,7 +72,7 @@ async function engineer(projects,fetchImpl=fetch){
 }
 async function policePatrol(projects,fetchImpl=fetch){
  const results=[];
- for(const p of projects.filter(x=>x.github?.name).slice(0,5)){
+ for(const p of projects.filter(x=>x.github?.name)){
   try{
    const report=await security.reviewPublicRepo(p.github.name,fetchImpl);
    const officer1=report.findings.filter(f=>['hardcoded-secret','eval','shell','innerHTML','weak-crypto'].includes(f.id));

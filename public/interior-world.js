@@ -1,3 +1,4 @@
+import {interiorStaff,isWorking} from './city-behavior.js';
 // Interior environments have their own rooms and props, not generic office copies.
 // Staff illustrations are labelled as routines, never represented as authenticated AI sessions.
 const SERVICES={
@@ -45,10 +46,10 @@ function worker(c,draw,x,y,name,skin,time,speech){
  label(c,name,x,y-39,'#fff7d9',9);
  if(speech)label(c,speech,x,y+38,'#baffdf',8);
 }
-export function renderInterior(ctx,{service,world,jobs,civic,time,drawAgent,onBubble}){
+export function renderInterior(ctx,{service,world,jobs,civic,time,drawAgent,onBubble,tasks={},onActor}){
  const def=SERVICES[service];if(!def)return false;
  rect(ctx,0,0,960,648,'#243650');rect(ctx,17,17,926,593,'#937d70');rect(ctx,24,24,912,579,def.theme[0]);
- const agents=(civic.agents||[]).filter(a=>a.service===service);
+ const agents=(civic.agents||[]).filter(a=>!a.projectId&&a.service===service);
  if(service==='university')universityRooms(ctx);
  else {
   const rooms=[{x:38,y:62,w:432,h:214},{x:490,y:62,w:430,h:214},{x:38,y:328,w:432,h:248},{x:490,y:328,w:430,h:248}];
@@ -60,27 +61,20 @@ export function renderInterior(ctx,{service,world,jobs,civic,time,drawAgent,onBu
   rect(ctx,25,287,910,26,'#b2a187');
  }
  label(ctx,def.name+'  •  INTERIOR',480,41,'#fff4e3',13);
- // Personnel illustrations are procedural routines, not simulated IA sessions.
- if(service==='library'){
-  const sx=75+(Math.sin(time/1600)+1)*130,sy=520+Math.sin(time/720)*5;
-  worker(ctx,drawAgent,sx,sy,'BIBLIOTECÁRIA',{hair:2,skinTone:2,outfit:'#955ea4',hat:1},time,'ORGANIZANDO ESTANTES');
-  rect(ctx,sx+17,sy-10,12,19,'#d3aa71');rect(ctx,sx+19,sy-7,8,12,'#83adb7');
- } else if(service==='university'){
-  worker(ctx,drawAgent,388,507,'PESQUISADOR',{hair:2,skinTone:0,outfit:'#3f829e'},time,'BUSCA NO GITHUB');
-  worker(ctx,drawAgent,601,507,'ENGENHEIRO',{hair:3,skinTone:2,outfit:'#597c9d'},time+480,'ANALISA READMES');
- } else if(service==='police'){
-  worker(ctx,drawAgent,225,240,'DELEGADO',{hair:1,skinTone:1,outfit:'#345b8b',hat:1},time,'CONSOLIDA RELATÓRIOS');
-  worker(ctx,drawAgent,635,248,'POLICIAL 01',{hair:0,skinTone:0,outfit:'#4e7f92',hat:1},time+300,'ANÁLISE ESTÁTICA');
-  worker(ctx,drawAgent,700,514,'POLICIAL 02',{hair:4,skinTone:3,outfit:'#425b96',hat:1},time+700,'CREDENCIAIS');
- } else if(service==='cityhall'){
-  worker(ctx,drawAgent,244,224,'SECRETÁRIA',{hair:3,skinTone:1,outfit:'#a35f9a'},time,'LEMBRETES');
-  const reminder=civic.reminders?.find(r=>!r.done);
-  if(reminder&&onBubble)onBubble(ctx,480,186,reminder.message,245);
- } else if(service==='talents')worker(ctx,drawAgent,250,230,'RECEPÇÃO',{hair:0,skinTone:2,outfit:'#a178a7'},time,'CADASTRO DE TALENTOS');
+ // Staff are civic routines with their own identities and function-specific interaction.
+ for(const staff of interiorStaff(service,tasks)){
+  const x=staff.id==='librarian'?75+(Math.sin(time/1600)+1)*130:staff.x,y=staff.y;
+  const busy=staff.service==='police'?tasks.police?.busy:staff.id==='researcher'?tasks.research?.busy:staff.id==='engineer'?tasks.engineer?.busy:false;
+  worker(ctx,drawAgent,x,y,staff.name.toUpperCase(),{spriteIndex:staff.sprite},busy?time:0,busy?'TRABALHANDO':staff.role.toUpperCase());
+  onActor?.({x,y,staff});
+ }
+ if(service==='cityhall'){const reminder=civic.reminders?.find(r=>!r.done);if(reminder&&onBubble)onBubble(ctx,480,186,reminder.message,245);}
+ if(service==='police'&&!tasks.police?.busy)label(ctx,'POLICIAIS EM RONDA PELA CIDADE',690,512,'#baffdf',10);
+
  agents.slice(0,9).forEach((a,i)=>{
   const x=service==='university'?160+i%4*160:service==='library'?520+(i%3)*110:190+(i%4)*166;
   const y=service==='university'?523+(i>=4?35:0):i<4?525:560;
-  const active=jobs.some(j=>j.agentId===a.id&&j.connected&&['running','waiting'].includes(j.status));
+  const active=isWorking(a.id,jobs);onActor?.({x,y,agent:a});
   worker(ctx,drawAgent,x,y,a.name.toUpperCase(),a.skin,time+i*320,active?'IA EM MISSÃO':'PERFIL CADASTRADO');
  });
  label(ctx,'EQUIPE INSTITUCIONAL: AUTOMAÇÕES LOCAIS  •  IA SOMENTE QUANDO CONECTADA',480,628,'#f0e2c8',10);

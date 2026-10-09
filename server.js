@@ -32,6 +32,7 @@ for (const o of world.objects) { if(o.kind==='office'){delete o.dir; if(!o.githu
 const campus=world.objects.find(o=>o.kind==='service'&&o.service==='university');
 if(campus&&campus.w===8&&campus.h===6){const future={...campus,w:10,h:8};if(!world.objects.some(o=>o.id!==campus.id&&o.x<future.x+future.w&&o.x+o.w>future.x&&o.y<future.y+future.h&&o.y+o.h>future.y)){campus.w=10;campus.h=8;world.revision++;persist();}}
 function persist(){fs.mkdirSync(path.dirname(DATA),{recursive:true});const p=DATA+'.tmp';fs.writeFileSync(p,JSON.stringify(world,null,2));fs.renameSync(p,DATA);}
+civic.ensureProjectTeams(world.objects.filter(o=>o.kind==='office'));
 const jobs=new Map();
 const tasks={research:{busy:false,last:0,result:null},engineer:{busy:false,last:0,result:null},police:{busy:false,last:0,result:null}};
 async function runDepartment(key,executor){
@@ -48,7 +49,7 @@ function autoDepartments(){const settings=civic.getSettings(), now=Date.now();
 }
 
 const PROVIDERS=['codex','claude','gemini','ollama','manus','demo'];
-function publicJob(j){return {id:j.id,projectId:j.projectId,provider:j.provider,agentId:j.agentId||null,prompt:j.prompt,model:j.model,status:j.status,phase:j.phase,log:j.log.slice(-12000),created:j.created,updated:j.updated,remoteUrl:j.remoteUrl||null,connected:!!j.connected,changed:!!j.changed,prUrl:j.prUrl||null};}
+function publicJob(j){return {role:j.role||null,managerId:j.managerId||null,id:j.id,projectId:j.projectId,provider:j.provider,agentId:j.agentId||null,prompt:j.prompt,model:j.model,status:j.status,phase:j.phase,log:j.log.slice(-12000),created:j.created,updated:j.updated,remoteUrl:j.remoteUrl||null,connected:!!j.connected,changed:!!j.changed,prUrl:j.prUrl||null};}
 function pushLog(j,text){j.log=(j.log+String(text)).slice(-18000);j.updated=Date.now();}
 function state(){return {world,jobs:[...jobs.values()].reverse().slice(0,40).map(publicJob),providers:PROVIDERS,connections:{github:github.hasGithubAuth(),manus:!!process.env.MANUS_API_KEY,ollama:ollamaAvailable,localCli:detectedCli},online:'servidor local'};}
 let ollamaAvailable=false;let detectedCli=[];
@@ -62,8 +63,8 @@ function job(id){const j=jobs.get(id);if(!j)fail(404,'Missão não encontrada');
 function validateGithubProject(p){if(!p.github?.name)fail(422,'Conecte este prédio a um repositório do GitHub.');try{return github.lookupGithubRepo(p.github.name)}catch(e){fail(422,'GitHub: '+e.message)}}
 function abortJob(j){j.cancelled=true;if(j.provider==='manus'&&j.remoteTaskId){void manusRequest('task.stop',{method:'POST',body:{task_id:j.remoteTaskId}}).catch(e=>pushLog(j,'Não foi possível parar a tarefa Manus remotamente: '+e.message+'\n'));}if(j.abortController)j.abortController.abort();if(j.child){try{if(process.platform==='win32'){cp.spawn('taskkill',['/PID',String(j.child.pid),'/T','/F'],{windowsHide:true});}else j.child.kill('SIGTERM');}catch{}}}
 function commandFor(j){
-  const lesson=civic.lessonContext('desenvolvimento');
-  const instruction='Trabalhe somente na pasta deste projeto. Não execute deploy, push ou commit. Não manipule segredos. Faça uma mudança limitada e relatório de testes. Contexto de habilidades: '+lesson+'\nTarefa: '+j.prompt;
+  const agent=j.agentId?civic.getAgent(j.agentId):null;const lesson=civic.lessonContext(agent?.role||'desenvolvimento');
+  const instruction='Função neste projeto: '+(agent?.officeFunction||'Código')+'. '+(agent?.managerId?'Subagente vinculado ao Gerente do projeto. ':'')+'Trabalhe somente na pasta deste projeto. Não execute deploy, push ou commit. Não manipule segredos. Faça uma mudança limitada e relatório de testes. Contexto de habilidades: '+lesson+'\nTarefa: '+j.prompt;
   if(j.provider==='codex')return ['codex',['exec','--sandbox','workspace-write',instruction]];
   if(j.provider==='claude')return ['claude',['-p','--permission-mode','acceptEdits',instruction]];
   return ['gemini',['-p',instruction,'--approval-mode','auto_edit']];
@@ -91,7 +92,7 @@ async function runOllama(j){
   try{
     const projectGitHub=project(j.projectId).github;
     const context=`Repositório conectado: https://github.com/${projectGitHub.name}, branch ${projectGitHub.branch}. Você não leu os arquivos, a menos que sejam fornecidos expressamente. Não afirme que os modificou.`;
-    const response=await fetch(new URL('/api/chat',base),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({model:j.model||process.env.OLLAMA_MODEL||'qwen3:8b',stream:false,messages:[{role:'system',content:'Você é um agente de planejamento e análise da SanTTos. Responda em português. Você não tem acesso à pasta local nem permissão para afirmar que modificou arquivos. '+context},{role:'user',content:j.prompt}],options:{num_predict:1600}}),signal:controller.signal});
+    const response=await fetch(new URL('/api/chat',base),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({model:j.model||process.env.OLLAMA_MODEL||'qwen3:8b',stream:false,messages:[{role:'system',content:'Você é um agente de planejamento e análise da SanTTos. Sua função é '+(j.role||'Código')+'. Responda em português. Você não tem acesso à pasta local nem permissão para afirmar que modificou arquivos. '+context},{role:'user',content:j.prompt}],options:{num_predict:1600}}),signal:controller.signal});
     if(!response.ok){const data=await response.json();throw Error(data.error||'Ollama respondeu '+response.status);}
     j.connected=true;const data=await response.json();pushLog(j,data.message?.content||'(sem resposta)');
   }finally{clearTimeout(timer);j.abortController=null;}
@@ -106,7 +107,7 @@ async function manusRequest(endpoint,{method='GET',body,search}={}){
 function extractStatus(messages){for(const m of messages){if(m.type==='status_update')return m.status_update?.agent_status;}return null;}
 async function runManus(j){
   j.phase='criando tarefa';
-  const projectGitHub=project(j.projectId).github;const message=j.prompt+'\n\nProjeto: https://github.com/'+projectGitHub.name+' (branch '+projectGitHub.branch+'). Se o repositório for privado, somente acesse caso a integração GitHub da conta Manus tenha sido autorizada.';
+  const projectGitHub=project(j.projectId).github;const message='Função no projeto: '+(j.role||'Código')+'. '+j.prompt+'\n\nProjeto: https://github.com/'+projectGitHub.name+' (branch '+projectGitHub.branch+'). Se o repositório for privado, somente acesse caso a integração GitHub da conta Manus tenha sido autorizada.';
   const created=await manusRequest('task.create',{method:'POST',body:{message:{content:message},locale:'pt-BR',interactive_mode:false}});
   if(!created.task_id)throw Error('API Manus não devolveu task_id');
   j.connected=true;j.remoteUrl=created.task_url||null;j.remoteTaskId=created.task_id;j.phase='trabalhando remotamente';pushLog(j,'Manus: tarefa '+created.task_id+' criada.\n');
@@ -141,7 +142,19 @@ async function runJob(j){
     else await runCLI(j,project(j.projectId));
     if(!j.cancelled && j.status!=='waiting'){j.status='completed';j.phase='concluído';}
   }catch(e){if(!j.cancelled){j.status='failed';j.phase='erro';pushLog(j,'\nERRO: '+e.message+'\n');}}
-  finally{if(j.cancelled){j.status='cancelled';j.phase='cancelado';}j.updated=Date.now();}
+  finally{
+    if(j.cancelled){j.status='cancelled';j.phase='cancelado';}
+    if(j.workDir&&j.changed&&civic.getSettings().policeEnabled){
+      try{const report=security.reviewWorkspace(j.workDir),p=project(j.projectId);
+        civic.recordPoliceReport({projectId:j.projectId,repo:p.github.name,summary:'Missão '+j.id+': '+report.filesReviewed+' fontes e '+report.configFiles+' configurações locais revisadas. Cobertura parcial.',officers:[
+          {name:'Policial de Código',task:'Inspeção automática do código da missão',findings:report.findings},
+          {name:'Policial de Credenciais',task:'Configurações e possíveis segredos',findings:[...report.findings.filter(f=>f.id==='hardcoded-secret'),...report.configFindings]},
+          {name:'Delegado',task:'Encaminhamento ao Gerente',findings:[...report.findings,...report.configFindings]}
+        ]});pushLog(j,'\nDelegacia: inspeção automática local registrada para o Gerente.\n');
+      }catch(e){pushLog(j,'\nDelegacia: inspeção local não concluída: '+e.message+'\n');}
+    }
+    j.updated=Date.now();
+  }
 }
 const MIME={'.png':'image/png','.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.ico':'image/x-icon'};
 function serveFile(url,res){
@@ -176,6 +189,7 @@ function createApp(){return http.createServer(async(req,res)=>{
       if(!(req.headers['content-type']||'').startsWith('application/json'))fail(415,'JSON obrigatório');
       const b=await readJson(req);
       if(url.pathname==='/api/civic/agent'){try{return send(res,201,{agent:civic.addAgent(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/project-agent'){if([...jobs.values()].some(j=>j.agentId===b.agentId&&['running','waiting','pending'].includes(j.status)))fail(409,'Conclua ou cancele a missão antes de trocar o provedor');try{return send(res,200,{agent:civic.configureProjectAgent(b,projectList().map(p=>p.projectId))});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/agent/assign'){try{return send(res,200,{agent:civic.assignAgent(b,projectList().map(p=>p.projectId))});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/automation'){try{return send(res,200,{settings:civic.setAutomation(b.name,b.enabled)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/research/run')return send(res,200,await runDepartment('research',()=>academy.discover()));
@@ -195,12 +209,12 @@ function createApp(){return http.createServer(async(req,res)=>{
         const report=await security.reviewPublicRepo(p.github.name);
         return send(res,200,{report});
       }
-      if(url.pathname==='/api/map/edit'){try{editWorld(world,b)}catch(e){fail(409,e.message)}persist();return send(res,200,{world});}
+      if(url.pathname==='/api/map/edit'){try{editWorld(world,b)}catch(e){fail(409,e.message)}persist();civic.ensureProjectTeams(projectList());return send(res,200,{world});}
       if(url.pathname==='/api/project'){
         const p=project(b.id);
         const repo=github.lookupGithubRepo(b.github);
         if(typeof b.name==='string'&&b.name.trim())p.name=b.name.trim().slice(0,45);
-        p.github=repo;world.revision++;persist();return send(res,200,{ok:true,project:p});
+        p.github=repo;world.revision++;persist();if(civic.getSettings().policeEnabled&&!tasks.police.busy){tasks.police.last=0;void runDepartment('police',()=>academy.policePatrol(projectList())).catch(e=>console.warn('[Delegacia]',e.message));}return send(res,200,{ok:true,project:p});
       }
       if(url.pathname==='/api/job/publish'){
         const j=job(b.id);
@@ -214,11 +228,12 @@ function createApp(){return http.createServer(async(req,res)=>{
         const p=project(b.projectId), provider=String(b.provider||''),prompt=String(b.prompt||'').trim();
         const agent=b.agentId?civic.getAgent(b.agentId):null;
         if(b.agentId&&(!agent||agent.provider!==provider))fail(422,'Agente não encontrado ou pertence a outro provedor');
+        if(agent&&[...jobs.values()].some(j=>j.agentId===agent.id&&['running','waiting','pending'].includes(j.status)))fail(409,'Este agente já tem uma missão em andamento ou aguardando aprovação');
         if(agent?.projectId&&agent.projectId!==p.projectId)fail(422,'Este agente está designado para outro escritório');
         if(!PROVIDERS.includes(provider)||provider==='demo')fail(400,'Selecione um agente de IA real (modo demonstração desativado)');
         if(!p.github?.name)fail(422,'Vincule primeiro um repositório do GitHub a este projeto.');
         if(prompt.length<4||prompt.length>5500)fail(400,'Missão deve ter entre 4 e 5500 caracteres');
-        const j={id:randomUUID(),projectId:p.projectId,provider,agentId:agent?.id||null,model:String(b.model||'').slice(0,80),prompt,status:'pending',phase:'aguardando aprovação',log:'',created:Date.now(),updated:Date.now(),cancelled:false};
+        const j={role:agent?.projectRole||null,managerId:agent?.managerId||null,id:randomUUID(),projectId:p.projectId,provider,agentId:agent?.id||null,model:String(b.model||'').slice(0,80),prompt,status:'pending',phase:'aguardando aprovação',log:'',created:Date.now(),updated:Date.now(),cancelled:false};
         jobs.set(j.id,j);if(jobs.size>100){const old=[...jobs.values()].find(x=>!['running','pending'].includes(x.status));if(old)jobs.delete(old.id);}
         return send(res,201,{job:publicJob(j)});
       }
