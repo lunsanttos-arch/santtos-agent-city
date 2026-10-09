@@ -70,8 +70,7 @@ export async function openService(obj,context){const {api,store,toast,projects,c
   if(!last.suggestions.length)nodeCard(body,'Caixa de sugestões vazia','Vincule repositórios aos projetos e peça ao Engenheiro para analisar.');
   for(const sg of last.suggestions.slice(-16).reverse()){
     const project=projects().find(p=>p.projectId===sg.projectId);
-    nodeCard(body,(project?.name||sg.projectId)+'  ←  '+sg.repo,sg.reason+'
-'+sg.evidence+' · '+sg.status);
+    nodeCard(body,(project?.name||sg.projectId)+'  ←  '+sg.repo,sg.reason+'\n'+sg.evidence+' · '+sg.status);
   }
   body.append(element('h3','AULAS E INSTRUÇÕES'));
   const title=labelled(body,'TÍTULO DA AULA','text','Ex.: Padrões de transmissão SRT');title.maxLength=90;
