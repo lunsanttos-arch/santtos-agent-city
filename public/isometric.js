@@ -18,15 +18,15 @@ export function hitIsoObject(objects,px,py){
   return null;
 }
 function tile(ctx,x,y,t,seed,time){
-  const colors={grass:(seed%8===0?'#78b969':seed%4===0?'#84c774':'#8ecf7a'),road:'#8b97a2',path:'#ebd5aa',water:'#53afd6'};
+  const colors={grass:(seed%8===0?'#78b969':seed%4===0?'#84c774':'#8ecf7a'),road:(seed%2?'#a2a7a1':'#9ca39d'),path:'#ebd5aa',water:'#53afd6'};
   poly(ctx,quad(x,y),colors[t]||colors.grass,t==='road'?'#aab3ac':'#81bb6f');
   const c=projectIso(x+.5,y+.5);
   if(t==='grass'){
-    if(seed%11===0){ctx.fillStyle='#3b925e';ctx.fillRect(c.x-3,c.y-1,2,3);ctx.fillRect(c.x+2,c.y-3,2,2)}
+    if(seed%11===0){ctx.fillStyle='#4b9857';ctx.fillRect(c.x-3,c.y-1,2,3);ctx.fillRect(c.x+2,c.y-3,2,2)}
     if(seed%41===0){ctx.fillStyle='#fce3a4';ctx.fillRect(c.x+2,c.y,2,2)}
   }else if(t==='road'){
-    if(seed%6===0){ctx.fillStyle='#6d7e8d';ctx.fillRect(c.x-5,c.y-1,5,2)}
-    if(seed%11===0){ctx.fillStyle='#f5ead0';ctx.fillRect(c.x+2,c.y,7,1)}
+    if(seed%6===0){ctx.fillStyle='#798883';ctx.fillRect(c.x-5,c.y-1,5,2)}
+    if(seed%11===0){ctx.fillStyle='#efe1b1';ctx.fillRect(c.x+2,c.y,8,2)}
   }else if(t==='path'){
     ctx.fillStyle='#bfa47d';if(seed%3===0)ctx.fillRect(c.x-2,c.y,3,1);
   }else if(t==='water'){
@@ -70,14 +70,36 @@ function drawBuilding(ctx,o,count){
  wallWindows(ctx,base[1],base[2],z,4,'#a2d5f2');wallWindows(ctx,base[3],base[2],z,4,'#b1dee5');frontDoor(ctx,o,z,'#8bcbd2');signBoard(ctx,o,z,count);
 }
 function drawHouse(ctx,o){
- const z=40,f=quad(o.x,o.y,o.w,o.h),r=quad(o.x,o.y,o.w,o.h,z);
- const paint=['#fbe6c7','#f4dfd8','#d9e6eb','#fff0c6'][(o.x+o.y)%4];
- poly(ctx,[r[1],r[2],f[2],f[1]],'#c3ae95','#ac9c86');poly(ctx,[r[2],r[3],f[3],f[2]],paint,'#a89f82');
- const roofs=[['#bd4e62','#ee8493'],['#598ab2','#81bedc'],['#9c5da5','#c694d2'],['#c48253','#f5b078']];const [left,right]=roofs[(o.x*3+o.y)%roofs.length];
- decorativeRoof(ctx,o,z,left,right,'#704e5f');
- const chimney=projectIso(o.x+o.w*.68,o.y+o.h*.4,z+16);ctx.fillStyle='#b88f83';ctx.fillRect(chimney.x-4,chimney.y-12,8,13);ctx.fillStyle='#704e5a';ctx.fillRect(chimney.x-5,chimney.y-13,10,3);
- wallWindows(ctx,f[1],f[2],z,2,'#9bd4e7');frontDoor(ctx,o,z,'#896271');
- const garden=projectIso(o.x+o.w*.8,o.y+o.h*.95);ctx.fillStyle='#5b9553';ctx.fillRect(garden.x-4,garden.y-8,9,9);ctx.fillStyle='#fda4b8';ctx.fillRect(garden.x,garden.y-9,3,3);
+ const z=44,f=quad(o.x,o.y,o.w,o.h),r=quad(o.x,o.y,o.w,o.h,z);
+ const skins=[{wall:'#fff0c9',trim:'#8c6c68',roof:['#a6445c','#e98690'],glass:'#a5dbe6'},
+   {wall:'#e0f0ed',trim:'#587e84',roof:['#376f9e','#7fbed8'],glass:'#b4e6e7'},
+   {wall:'#f7decd',trim:'#96726a',roof:['#a46b57','#f1ab7d'],glass:'#b2d6ff'},
+   {wall:'#eee0f8',trim:'#73618a',roof:['#7654a2','#b499dd'],glass:'#b3dbe2'}];
+ const style=skins[(Math.abs(o.x*7+o.y*3))%skins.length];
+ // Little raised foundation with bright masonry and hardwood porch.
+ poly(ctx,quad(o.x-.15,o.y-.1,o.w+.3,o.h+.3,-2),'#9b9f77','#5f745d');
+ poly(ctx,[r[1],r[2],f[2],f[1]],style.trim,'#756778');
+ poly(ctx,[r[2],r[3],f[3],f[2]],style.wall,'#887e76');
+ // Roof ridgeline, opposing dark/shaded slopes and sparkling shingles.
+ decorativeRoof(ctx,o,z,style.roof[0],style.roof[1],style.trim);
+ for(let i=1;i<4;i++){const q=projectIso(o.x+o.w*.48,o.y+o.h*i/4,z+15);
+   ctx.fillStyle='#fff3cb7a';ctx.fillRect(q.x-18,q.y-4,6,2);ctx.fillRect(q.x+15,q.y+7,4,2);
+ }
+ // Dormer and chimney cast legible pixel silhouettes.
+ const dormer=projectIso(o.x+o.w*.43,o.y+o.h*.48,z+21);ctx.fillStyle=style.trim;
+ ctx.fillRect(dormer.x-13,dormer.y-13,26,20);ctx.fillStyle=style.glass;ctx.fillRect(dormer.x-9,dormer.y-9,18,14);
+ ctx.fillStyle='#fdf7e1';ctx.fillRect(dormer.x-2,dormer.y-9,3,14);
+ const chimney=projectIso(o.x+o.w*.77,o.y+o.h*.30,z+18);ctx.fillStyle='#896475';ctx.fillRect(chimney.x-5,chimney.y-13,10,20);
+ ctx.fillStyle='#e6c7aa';ctx.fillRect(chimney.x-3,chimney.y-11,6,16);ctx.fillStyle='#4c4858';ctx.fillRect(chimney.x-7,chimney.y-16,14,4);
+ wallWindows(ctx,f[1],f[2],z,2,style.glass);wallWindows(ctx,f[3],f[2],z,2,style.glass);
+ frontDoor(ctx,o,z,style.trim);
+ const porch=projectIso(o.x+o.w*.57,o.y+o.h+0.65);poly(ctx,[{x:porch.x-23,y:porch.y-3},{x:porch.x,y:porch.y-12},{x:porch.x+23,y:porch.y-3},{x:porch.x,y:porch.y+6}],'#caa27a','#957d63');
+ // Green hedges and flower pots so every home feels inhabited without fake agents.
+ for(const side of [.12,.91]){const hedge=projectIso(o.x+o.w*side,o.y+o.h*.88);
+   ctx.fillStyle='#427b52';ctx.fillRect(hedge.x-9,hedge.y-9,17,10);ctx.fillStyle='#69b567';ctx.fillRect(hedge.x-6,hedge.y-13,12,9);
+   ctx.fillStyle='#f7b4b7';ctx.fillRect(hedge.x-3,hedge.y-13,4,4);}
+ const mailbox=projectIso(o.x+o.w+.45,o.y+o.h+.2);
+ ctx.fillStyle='#5d5267';ctx.fillRect(mailbox.x-1,mailbox.y-13,3,13);ctx.fillStyle='#c25c6d';ctx.fillRect(mailbox.x-6,mailbox.y-16,12,7);
 }
 const SERVICE_STYLES={cityhall:{walls:['#d6c9b3','#f2e9d5'],roof:['#62558c','#a08fbb'],label:'PREFEITURA',symbol:'★'},library:{walls:['#cfb99e','#f8dfbb'],roof:['#795b9e','#c5a3dd'],label:'BIBLIOTECA',symbol:'▤'},university:{walls:['#c6d6d3','#e8f5dc'],roof:['#547fa4','#91bfd7'],label:'UNIVERSIDADE',symbol:'✦'},police:{walls:['#afc4d8','#e6f0ee'],roof:['#405f9e','#8ab5e1'],label:'POLÍCIA',symbol:'◆'},talents:{walls:['#d7c4d7','#f8e1e4'],roof:['#a35c92','#e3a1c8'],label:'TALENTOS',symbol:'✧'}};
 function drawService(ctx,o){

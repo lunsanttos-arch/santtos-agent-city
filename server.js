@@ -4,6 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const os=require('node:os');
 const github=require('./github');
+const security=require('./security');
 const civic=require('./civic');
 const cp=require('node:child_process');
 const {randomUUID}=require('node:crypto');
@@ -29,7 +30,7 @@ for (const o of world.objects) { if(o.kind==='office'){delete o.dir; if(!o.githu
 function persist(){fs.mkdirSync(path.dirname(DATA),{recursive:true});const p=DATA+'.tmp';fs.writeFileSync(p,JSON.stringify(world,null,2));fs.renameSync(p,DATA);}
 const jobs=new Map();
 const PROVIDERS=['codex','claude','gemini','ollama','manus','demo'];
-function publicJob(j){return {id:j.id,projectId:j.projectId,provider:j.provider,prompt:j.prompt,model:j.model,status:j.status,phase:j.phase,log:j.log.slice(-12000),created:j.created,updated:j.updated,remoteUrl:j.remoteUrl||null,connected:!!j.connected,changed:!!j.changed,prUrl:j.prUrl||null};}
+function publicJob(j){return {id:j.id,projectId:j.projectId,provider:j.provider,agentId:j.agentId||null,prompt:j.prompt,model:j.model,status:j.status,phase:j.phase,log:j.log.slice(-12000),created:j.created,updated:j.updated,remoteUrl:j.remoteUrl||null,connected:!!j.connected,changed:!!j.changed,prUrl:j.prUrl||null};}
 function pushLog(j,text){j.log=(j.log+String(text)).slice(-18000);j.updated=Date.now();}
 function state(){return {world,jobs:[...jobs.values()].reverse().slice(0,40).map(publicJob),providers:PROVIDERS,connections:{github:github.hasGithubAuth(),manus:!!process.env.MANUS_API_KEY,ollama:ollamaAvailable,localCli:detectedCli},online:'servidor local'};}
 let ollamaAvailable=false;let detectedCli=[];
@@ -156,8 +157,18 @@ function createApp(){return http.createServer(async(req,res)=>{
       if(!(req.headers['content-type']||'').startsWith('application/json'))fail(415,'JSON obrigatório');
       const b=await readJson(req);
       if(url.pathname==='/api/civic/agent'){try{return send(res,201,{agent:civic.addAgent(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/collection'){try{return send(res,201,{collection:civic.addCollection(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/profile'){try{return send(res,201,{profile:civic.addProfile(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/collection/repo'){try{return send(res,200,{collection:civic.addRepoToCollection(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/reminder'){try{return send(res,201,{reminder:civic.addReminder(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/reminder/done'){try{return send(res,200,{reminder:civic.finishReminder(b.id)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/lesson'){try{return send(res,201,{lesson:civic.addLesson(b)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/audit'){const j=job(b.id);return send(res,200,{audit:civic.auditJob(j)});}
+      if(url.pathname==='/api/civic/repo-scan'){
+        const p=project(b.projectId);if(!p.github?.name)fail(422,'Vincule um repositório no GitHub antes de fiscalizar');
+        const report=await security.reviewPublicRepo(p.github.name);
+        return send(res,200,{report});
+      }
       if(url.pathname==='/api/map/edit'){try{editWorld(world,b)}catch(e){fail(409,e.message)}persist();return send(res,200,{world});}
       if(url.pathname==='/api/project'){
         const p=project(b.id);
@@ -175,10 +186,12 @@ function createApp(){return http.createServer(async(req,res)=>{
       }
       if(url.pathname==='/api/job'){
         const p=project(b.projectId), provider=String(b.provider||''),prompt=String(b.prompt||'').trim();
+        const agent=b.agentId?civic.getAgent(b.agentId):null;
+        if(b.agentId&&(!agent||agent.provider!==provider))fail(422,'Agente não encontrado ou pertence a outro provedor');
         if(!PROVIDERS.includes(provider)||provider==='demo')fail(400,'Selecione um agente de IA real (modo demonstração desativado)');
         if(!p.github?.name)fail(422,'Vincule primeiro um repositório do GitHub a este projeto.');
         if(prompt.length<4||prompt.length>5500)fail(400,'Missão deve ter entre 4 e 5500 caracteres');
-        const j={id:randomUUID(),projectId:p.projectId,provider,model:String(b.model||'').slice(0,80),prompt,status:'pending',phase:'aguardando aprovação',log:'',created:Date.now(),updated:Date.now(),cancelled:false};
+        const j={id:randomUUID(),projectId:p.projectId,provider,agentId:agent?.id||null,model:String(b.model||'').slice(0,80),prompt,status:'pending',phase:'aguardando aprovação',log:'',created:Date.now(),updated:Date.now(),cancelled:false};
         jobs.set(j.id,j);if(jobs.size>100){const old=[...jobs.values()].find(x=>!['running','pending'].includes(x.status));if(old)jobs.delete(old.id);}
         return send(res,201,{job:publicJob(j)});
       }

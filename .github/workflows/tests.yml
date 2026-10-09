@@ -3,10 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
-
 permissions:
   contents: read
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -16,13 +14,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verificar sintaxe
+      - name: Validar sintaxe
         run: |
-          node --check server.js
-          node --check world.js
-          node --check civic.js
-          node --input-type=module --check < public/app.js
-          node --input-type=module --check < public/isometric.js
-          node --input-type=module --check < public/institutions.js
+          for f in server.js world.js github.js civic.js security.js; do node --check "$f"; done
+          for f in public/*.js; do node --input-type=module --check < "$f"; done
       - name: Executar testes
         run: npm test
