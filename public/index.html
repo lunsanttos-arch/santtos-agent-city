@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SanTTos Agent City • Isometric Edition</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+</head><body>
+<header class="topbar">
+  <div class="brand"><div class="brand-glyph">S</div><div><b>SanTTos <em>AGENT CITY</em></b><small>ISOMETRIC / v0.3</small></div></div>
+  <div class="topcenter"><span class="light"></span><span id="githubTopStatus">GITHUB NÃO CONECTADO</span><i></i><span id="counterBuildings">05 PRÉDIOS</span><i></i><span id="counterMissions">00 MISSÕES</span></div>
+  <div class="actions"><button id="btnWorld" class="navbtn active">◈ CIDADE</button><button id="btnEditor" class="navbtn">✎ CONSTRUIR</button></div>
+</header>
+<div class="layout">
+ <aside class="left-panel">
+  <section class="panel-section"><div class="section-title"><span>▣</span> EXPLORADOR <span class="s-tiny">01</span></div><div class="player-info"><div class="pixel-avatar">☺</div><div><strong>Prefeito SanTTos</strong><small>Administrador da cidade</small></div></div></section>
+  <section class="panel-section grow"><div class="section-title"><span>▣</span> PROJETOS <span class="s-tiny" id="projectCount">05</span></div><div id="projectList" class="project-list"></div></section>
+  <section class="panel-section"><div class="section-title"><span>◉</span> AGENTES / PROVEDORES</div><div class="provider-list"><div><b class="dot codex"></b>Codex CLI <span id="statusCodex">–</span></div><div><b class="dot claude"></b>Claude Code <span id="statusClaude">–</span></div><div><b class="dot gemini"></b>Gemini CLI <span id="statusGemini">–</span></div><div><b class="dot ollama"></b>Ollama local <span id="statusOllama">–</span></div><div><b class="dot manus"></b>Manus API <span id="manusStatus">–</span></div></div></section>
+  <div class="left-foot">WASD / SETAS: ANDAR<br>CLIQUE NO PRÉDIO: ENTRAR<br>ESC: VOLTAR PARA CIDADE</div>
+ </aside>
+ <main class="game-wrap">
+  <div class="game-head"><div><span class="breadcrumb">MUNDO /</span> <b id="sceneTitle">CIDADE SANTTOS</b></div><div class="head-chip" id="editLabel">● EXPLORANDO</div></div>
+  <div class="viewport"><canvas id="world" width="960" height="648" aria-label="Cidade pixel art interativa"></canvas>
+   <div id="toast" class="toast hidden"></div>
+   <div class="overlay-corner"><span id="mapLocation">VILA DOS AGENTES</span><span id="cursorInfo">40 × 27</span></div>
+  </div>
+  <div class="game-bottom"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Mover personagem</span><span><kbd>CLIQUE</kbd> Entrar / construir</span><span><kbd>ESC</kbd> Sair</span><span class="fps" id="currentScene">MAPA 01</span></div>
+ </main>
+ <aside class="right-panel">
+  <div id="editorPane" class="side-pane hidden"><div class="section-title">✎ EDITOR DE CIDADE <span class="s-tiny">LIVE</span></div><p class="hint">Escolhe um item e clica no terreno. O mapa é salvo localmente; cada projeto utiliza um repositório do GitHub.</p><div id="tools" class="tool-grid"></div><div class="side-subtitle">EDITAR CONSTRUÇÃO</div><div class="tool-row"><button id="toolSelect" class="actionbtn">◈ Selecionar</button><button id="toolMove" class="actionbtn">⇄ Mover</button><button id="toolErase" class="actionbtn danger">✕ Apagar</button></div><p id="editorHelp" class="hint">Escolhe uma ferramenta.</p><div class="notice">DICA: ruas e caminhos podem ser pintados arrastando o mouse. Prédios e casas são posicionados com um clique.</div></div>
+  <div id="inspectorPane" class="side-pane">
+   <div class="section-title">◈ CENTRO DE OPERAÇÕES <span class="s-tiny">LIVE</span></div>
+   <div class="side-heading"><div class="illustration">⌂</div><h2 id="infoName">Bem-vindo à cidade!</h2><p id="infoSubtitle">Escolha um prédio para entrar e iniciar uma missão real com IA.</p></div>
+   <div id="projectControls" class="hidden"><div class="side-subtitle">GITHUB • PROJETO</div><label class="field">REPOSITÓRIO DO GITHUB<select id="projectRepo"><option value="">Conecte o GitHub primeiro</option></select></label><div class="github-actions"><button id="reloadRepos" class="actionbtn">↻ ATUALIZAR REPOS</button><button id="saveRepo" class="actionbtn primary">VINCULAR</button></div><p id="githubHelp" class="hint">Autentica com o GitHub CLI: <code>gh auth login</code>. Não precisas escolher nenhuma pasta do PC.</p></div>
+   <div id="missionControls" class="hidden"><div class="side-subtitle">NOVA MISSÃO</div><label class="field">AGENTE / PROVEDOR<select id="provider"><option value="codex">Codex CLI</option><option value="claude">Claude Code</option><option value="gemini">Gemini CLI</option><option value="ollama">Ollama (local)</option><option value="manus">Manus (API)</option></select></label><label class="field" id="modelRow">MODELO OLLAMA (OPCIONAL)<input id="model" placeholder="qwen3:8b"></label><label class="field">O QUE A IA DEVE FAZER?<textarea id="prompt" rows="4" placeholder="Ex: examine o travamento do input web do Playout, encontre a causa e proponha uma correção..."></textarea></label><button id="createMission" class="actionbtn primary full">✦ CRIAR MISSÃO</button><p class="hint">A IA só aparecerá na cidade depois de uma conexão/execução real. Para publicar alterações, será necessário aprovar um Pull Request separadamente.</p></div>
+  </div>
+  <div class="task-section"><div class="section-title">◷ MISSÕES <span class="s-tiny" id="jobCount">00</span></div><div id="jobList" class="job-list"><p class="empty">Nenhuma missão criada.</p></div></div>
+ </aside>
+</div>
+<div id="confirmModal" class="modal-wrap hidden"><div class="modal"><div class="modal-head">◈ ADICIONAR CONSTRUÇÃO</div><label class="field">NOME<input id="newObjectName" maxlength="45"></label><p class="hint">Uma construção pode representar um novo projeto para os agentes.</p><div class="modal-buttons"><button id="cancelAdd" class="actionbtn">CANCELAR</button><button id="confirmAdd" class="actionbtn primary">CONSTRUIR</button></div></div></div>
+<script type="module" src="/app.js"></script>
+</body></html>

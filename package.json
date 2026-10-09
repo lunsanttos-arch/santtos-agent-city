@@ -1,13 +1,8 @@
 {
-  "name": "santtos-agent-city",
-  "version": "0.3.0",
-  "private": true,
-  "description": "Cidade isometrica RPG pixel art com editor de mapa e agentes Codex Claude Gemini Ollama Manus",
-  "scripts": {
-    "start": "node server.js",
-    "test": "node --test tests/*.test.js"
-  },
-  "engines": {
-    "node": ">=20"
-  }
+  "name":"santtos-agent-city",
+  "version":"0.3.0",
+  "private":true,
+  "description":"Cidade isometrica RPG pixel art com editor de mapa e agentes Codex Claude Gemini Ollama Manus",
+  "scripts":{"start":"node server.js","test":"node --test tests/*.test.js"},
+  "engines":{"node":">=20"}
 }
