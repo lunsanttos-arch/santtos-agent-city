@@ -1,9 +1,11 @@
-// Original GBA-era inspired 4-direction pixel characters (no third-party sprite assets).
+import {drawAtlasAgent} from './atlas.js';
+// Original pixel characters; procedural fallback while the atlas loads.
 export const HAIR=['#492d38','#70422e','#d1a04a','#a45d55','#d7d3c8'];
 export const SKIN=['#f3bf97','#d89974','#ae745d','#8f5c49'];
 const CLOTHES=['#cd506b','#418da5','#9669b2','#65a47a','#e8a456','#5d69b5','#d57f8a'];
 export function skinFor(seed){const n=Math.abs(Number(seed)||0);return {hair:n%HAIR.length,skinTone:(n>>>3)%SKIN.length,hat:(n>>>2)%4,eyes:(n>>>5)%3,outfit:CLOTHES[(n>>>6)%CLOTHES.length]};}
 export function drawPixelAgent(ctx,cx,cy,appearance={},dir='down',walk=0,scale=1){
+ if(drawAtlasAgent(ctx,cx,cy,appearance,dir,walk,scale))return;
  const x=Math.round(cx),y=Math.round(cy),u=Math.max(.7,scale);const fill=(dx,dy,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(x+dx*u),Math.round(y+dy*u),Math.ceil(w*u),Math.ceil(h*u));};
  const color=appearance.outfit||'#8c68b2',hair=HAIR[appearance.hair%HAIR.length||0],skin=SKIN[appearance.skinTone%SKIN.length||0];
  const step=Math.floor(walk)%2;fill(-10,23,20,3,'#283c4677');

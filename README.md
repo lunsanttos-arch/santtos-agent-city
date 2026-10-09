@@ -30,3 +30,13 @@ As rondas do Pesquisador (aproximadamente **a cada 30 minutos**) e da Polícia (
 ## Testes
 
 `npm test` executa testes de API, mapa, criação e lotação de agentes, catalogação, análise heurística e delegacia. A aparência em navegador ainda exige avaliação manual no computador do usuário.
+
+## Atualização visual e diagnóstico
+
+Personagens usam seis skins animadas em pixel art; casas, escritórios e instituições usam um atlas original isométrico em `public/assets/city-atlas.png`. A arte gerada foi inspirada nas referências fornecidas, sem reutilizar os arquivos de referência. O desenho procedural permanece como alternativa durante o carregamento do atlas.
+
+Falhas no carregamento dos módulos e no desenho agora aparecem na tela com indicação para consultar F12. Uma falha de desenho não encerra permanentemente a animação. Isso ajuda a diagnosticar a tela verde; a causa específica no computador do usuário ainda precisa ser confirmada.
+
+No Windows, extraia a atualização numa pasta nova, feche o servidor antigo e execute `INICIAR-SANTTOS-CITY.bat`. Preserve uma cópia de `data/` e `.env` antes de migrar dados. Não abra `public/index.html` diretamente. Se a tela continuar verde, envie a primeira mensagem vermelha da aba Console em F12.
+
+Os testes executam sequencialmente porque compartilham `data/civic.json`. Para a regressão visual opcional, com Playwright e Chromium disponíveis e o servidor iniciado, execute `node scripts/browser-smoke.cjs` (defina `CHROMIUM_PATH` se necessário). Essas ferramentas não são necessárias para executar a aplicação.

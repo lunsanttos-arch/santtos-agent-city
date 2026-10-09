@@ -143,7 +143,7 @@ async function runJob(j){
   }catch(e){if(!j.cancelled){j.status='failed';j.phase='erro';pushLog(j,'\nERRO: '+e.message+'\n');}}
   finally{if(j.cancelled){j.status='cancelled';j.phase='cancelado';}j.updated=Date.now();}
 }
-const MIME={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.ico':'image/x-icon'};
+const MIME={'.png':'image/png','.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.ico':'image/x-icon'};
 function serveFile(url,res){
   const pathname=new URL(url,'http://localhost').pathname;
   const target=path.resolve(PUBLIC,'.'+(pathname==='/'?'/index.html':pathname));

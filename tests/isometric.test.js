@@ -1,5 +1,5 @@
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');
-const source=fs.readFileSync(path.join(__dirname,'..','public','isometric.js'),'utf8');
+const source=fs.readFileSync(path.join(__dirname,'..','public','isometric.js'),'utf8').replace("'./atlas.js'",JSON.stringify('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(path.join(__dirname,'..','public','atlas.js'),'utf8')).toString('base64')));
 const iso=import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 test('projeção isométrica e inversa localizam o mesmo tile',async()=>{
  const {projectIso,unprojectIso}=await iso;
