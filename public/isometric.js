@@ -1,4 +1,4 @@
-import {drawAtlasBuilding} from './atlas.js';
+import {drawAtlasBuilding,drawAtlasGround,drawAtlasFountain} from './atlas.js';
 // SanTTos Agent City — projeção isométrica original 2:1.
 // O tile lógico agora é 68 × 52; o mapa do editor e as salas 2D são preservados.
 export const ISO={tileWidth:34,tileHeight:17,originX:530,originY:92};
@@ -18,16 +18,25 @@ export function hitIsoObject(objects,px,py){
   }
   return null;
 }
-function tile(ctx,x,y,t,seed,time){
-  const colors={grass:(seed%8===0?'#78b969':seed%4===0?'#84c774':'#8ecf7a'),road:(seed%2?'#a2a7a1':'#9ca39d'),path:'#ebd5aa',water:'#53afd6'};
-  poly(ctx,quad(x,y),colors[t]||colors.grass,t==='road'?'#aab3ac':'#81bb6f');
+function tile(ctx,x,y,t,seed,time,terrain){
+  if(drawAtlasGround(ctx,t,quad(x,y),quad(Math.floor(x/4)*4,Math.floor(y/4)*4,4,4)))return;
+  const colors={grass:(seed%8===0?'#78b969':seed%4===0?'#84c774':'#8ecf7a'),road:'#778792',path:'#ebd5aa',water:'#53afd6'};
+  poly(ctx,quad(x,y),colors[t]||colors.grass,t==='road'?null:'#81bb6f');
   const c=projectIso(x+.5,y+.5);
   if(t==='grass'){
     if(seed%11===0){ctx.fillStyle='#4b9857';ctx.fillRect(c.x-3,c.y-1,2,3);ctx.fillRect(c.x+2,c.y-3,2,2)}
     if(seed%41===0){ctx.fillStyle='#fce3a4';ctx.fillRect(c.x+2,c.y,2,2)}
   }else if(t==='road'){
-    if(seed%6===0){ctx.fillStyle='#798883';ctx.fillRect(c.x-5,c.y-1,5,2)}
-    if(seed%11===0){ctx.fillStyle='#efe1b1';ctx.fillRect(c.x+2,c.y,8,2)}
+    const tq=(a,b)=>terrain?.[b]?.[a];
+    const edge=(a,b)=>{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle='#e3d5b7';ctx.lineWidth=2;ctx.stroke();};
+    const q=quad(x,y);
+    if(tq(x,y-1)!=='road')edge(q[0],q[1]);
+    if(tq(x+1,y)!=='road')edge(q[1],q[2]);
+    if(tq(x,y+1)!=='road')edge(q[2],q[3]);
+    if(tq(x-1,y)!=='road')edge(q[3],q[0]);
+    if(tq(x,y-1)!=='road'&&tq(x,y+1)==='road'&&x%2===0)poly(ctx,quad(x+.15,y+.93,.7,.13),'#f7dc99');
+    if(tq(x-1,y)!=='road'&&tq(x+1,y)==='road'&&y%2===0)poly(ctx,quad(x+.93,y+.15,.13,.7),'#f7dc99');
+    if(seed%4===0){ctx.fillStyle='#8d9daa';ctx.fillRect(c.x-2,c.y-1,2,1);}
   }else if(t==='path'){
     ctx.fillStyle='#bfa47d';if(seed%3===0)ctx.fillRect(c.x-2,c.y,3,1);
   }else if(t==='water'){
@@ -121,17 +130,17 @@ function drawTree(ctx,o){const p=projectIso(o.x+.5,o.y+.5);ctx.fillStyle='#72563
 function decor(ctx,o){const p=projectIso(o.x+.5,o.y+.5);
   if(o.kind==='tree')drawTree(ctx,o);else if(o.kind==='flower'){ctx.fillStyle='#eb8daf';ctx.fillRect(p.x-4,p.y-4,3,3);ctx.fillStyle='#fff0aa';ctx.fillRect(p.x+3,p.y,3,2)}
   else if(o.kind==='lamp'){ctx.fillStyle='#6c6080';ctx.fillRect(p.x-2,p.y-21,4,21);ctx.fillStyle='#fbe2a7';ctx.fillRect(p.x-5,p.y-26,11,8)}
-  else if(o.kind==='fountain'){poly(ctx,quad(o.x,o.y,o.w,o.h,1),'#d8d4bb');poly(ctx,quad(o.x+.3,o.y+.3,o.w-.6,o.h-.6,2),'#65bde0');ctx.fillStyle='#e9f4ed';ctx.fillRect(p.x-3,p.y-13,7,14);ctx.fillStyle='#91e4f0';ctx.fillRect(p.x-2,p.y-21,4,9)}
+  else if(o.kind==='fountain'){if(drawAtlasFountain(ctx,projectIso(o.x+o.w/2,o.y+o.h/2),(o.w+o.h)*ISO.tileWidth/2+10))return;poly(ctx,quad(o.x,o.y,o.w,o.h,1),'#d8d4bb');poly(ctx,quad(o.x+.3,o.y+.3,o.w-.6,o.h-.6,2),'#65bde0');ctx.fillStyle='#e9f4ed';ctx.fillRect(p.x-3,p.y-13,7,14);ctx.fillStyle='#91e4f0';ctx.fillRect(p.x-2,p.y-21,4,9)}
   else if(o.kind==='office')drawBuilding(ctx,o,o.activeCount||0);else if(o.kind==='house')drawHouse(ctx,o);else if(o.kind==='service')drawService(ctx,o);
 }
-export function renderIsometric(ctx,{terrain,objects,jobs,avatars,player,hover,editing,tool,time,drawPerson,camera}){
+export function renderIsometric(ctx,{terrain,objects,jobs,avatars,player,hover,editing,tool,time,drawPerson,camera,playerSkin,onPerson}){
   ctx.fillStyle='#85c776';ctx.fillRect(-4500,-4500,9000,9000);
-  for(let y=0;y<terrain.length;y++)for(let x=0;x<terrain[y].length;x++){const p=projectIso(x,y);if(camera&&(Math.abs(p.x-camera.cx)>610/camera.zoom||Math.abs(p.y-camera.cy)>435/camera.zoom))continue;tile(ctx,x,y,terrain[y][x],(x*1337+y*613)%101,time)}
+  for(let y=0;y<terrain.length;y++)for(let x=0;x<terrain[y].length;x++){const p=projectIso(x,y);if(camera&&(Math.abs(p.x-camera.cx)>610/camera.zoom||Math.abs(p.y-camera.cy)>435/camera.zoom))continue;tile(ctx,x,y,terrain[y][x],(x*1337+y*613)%101,time,terrain)}
   const active=jobs.filter(j=>j.connected&&(['running','waiting'].includes(j.status)||(j.status==='completed'&&Date.now()-j.updated<300000)));
   const items=[...objects.map(o=>({depth:o.x+o.y+o.w+o.h,kind:'obj',obj:o})),...avatars.filter(a=>a.resident||a.job&&active.some(j=>j.id===a.job.id)).map(a=>({depth:a.y+a.x,kind:'agent',a})),{depth:player.x+player.y,kind:'mayor'}].sort((a,b)=>a.depth-b.depth);
   for(const i of items){if(i.kind==='obj'){const o=i.obj;const c=projectIso(o.x+o.w/2,o.y+o.h/2);if(camera&&(Math.abs(c.x-camera.cx)>760/camera.zoom||Math.abs(c.y-camera.cy)>590/camera.zoom))continue;decor(ctx,{...o,activeCount:active.filter(j=>j.projectId===o.projectId).length})}
-    else if(i.kind==='agent'){const p=projectIso(i.a.x,i.a.y);drawPerson(p.x,p.y-21,i.a.color,i.a.dir,i.a.frame,.8);if(i.a.resident){ctx.textAlign='center';ctx.font='bold 8px monospace';ctx.fillStyle=i.a.working?'#0c633e':'#3a425c';ctx.fillText(i.a.name.slice(0,13),p.x,p.y-51);ctx.fillStyle=i.a.working?'#70f3af':'#c6cad7';ctx.fillRect(p.x-2,p.y-47,4,4);}}
-    else {const p=projectIso(player.x,player.y);drawPerson(p.x,p.y-21,'#995bcb',player.facing,player.frame,.8)}
+    else if(i.kind==='agent'){const p=projectIso(i.a.x,i.a.y);if(onPerson&&(i.a.agent||i.a.staff))onPerson({x:p.x,y:p.y-21,agent:i.a.agent,staff:i.a.staff});drawPerson(p.x,p.y-21,i.a.color,i.a.dir,i.a.frame,.8);if(i.a.resident){ctx.textAlign='center';ctx.font='bold 8px monospace';ctx.fillStyle=i.a.working?'#0c633e':'#3a425c';ctx.fillText(i.a.name.slice(0,13),p.x,p.y-51);ctx.fillStyle=i.a.working?'#70f3af':'#c6cad7';ctx.fillRect(p.x-2,p.y-47,4,4);}}
+    else {const p=projectIso(player.x,player.y);drawPerson(p.x,p.y-21,playerSkin||{player:true,spriteIndex:0},player.facing,player.frame,.8)}
   }
   if(editing&&hover&&hover.x>=0&&hover.y>=0&&hover.x<terrain[0].length&&hover.y<terrain.length){const size=tool==='office'?[6,5]:tool==='house'?[4,4]:tool==='fountain'?[3,3]:[1,1];const f=quad(hover.x,hover.y,size[0],size[1],3);poly(ctx,f,'#deb6f058','#fff6ca')}
 

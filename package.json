@@ -1,6 +1,6 @@
 {
   "name": "santtos-agent-city",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Cidade isométrica pixel art original com interiores institucionais, agentes reais e serviços GitHub",
   "scripts": {

@@ -25,5 +25,9 @@ jobs:
           node --input-type=module --check < public/isometric.js
           node --input-type=module --check < public/interior-world.js
           node --input-type=module --check < public/institutions.js
+          node --input-type=module --check < public/atlas.js
+          node --input-type=module --check < public/city-behavior.js
+          node --input-type=module --check < public/sprites.js
+          node --input-type=module --check < public/boot.js
       - name: Executar testes
         run: npm test

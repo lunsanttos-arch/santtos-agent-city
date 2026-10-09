@@ -1,7 +1,9 @@
+import {PROJECT_ROLES,roleOf,roleTitle,isWorking} from './city-behavior.js';
 // Edifícios públicos: controles de instituições. Nenhum avatar é criado aqui.
 const $=id=>document.getElementById(id);
 const SERVICES={cityhall:['🏛','PREFEITURA','Coordenação de missões e prioridades'],library:['📚','BIBLIOTECA','Pesquisa pública de repositórios GitHub'],university:['🎓','UNIVERSIDADE','Habilidades por documentação e instruções'],police:['🛡','DELEGACIA DIGITAL','Triagem técnica e registros de segurança'],talents:['✦','AGÊNCIA DE TALENTOS','Cadastre e configure seus agentes de IA']};
-const ROLES=[['desenvolvimento','Programação'],['arquitetura','Arquitetura'],['pesquisa','Pesquisador'],['engenharia','Engenheiro'],['qa','QA'],['seguranca','Segurança'],['redacao','Redação'],['gestao','Gestão'],['secretaria','Secretária'],['bibliotecaria','Bibliotecária']];
+const SKINS=[[1,'Secretária'],[2,'Bibliotecária'],[3,'Pesquisador'],[4,'Engenheiro'],[5,'Recepcionista'],[6,'Delegado'],[7,'Policial de Código'],[8,'Policial de Credenciais'],[9,'Gerente'],[10,'Código'],[11,'QA'],[12,'Tester'],[13,'UX'],[14,'Auxiliar'],[15,'Cidadão']].map(([id,name])=>[String(id),name]);
+const ROLES=[['desenvolvimento','Programação'],['arquitetura','Arquitetura'],['pesquisa','Pesquisador'],['engenharia','Engenheiro'],['qa','QA'],['seguranca','Segurança'],['redacao','Redação'],['gestao','Gestão'],['secretaria','Secretária'],['bibliotecaria','Bibliotecária'],['tester','Tester'],['ux','UX'],['auxiliar','Auxiliar'],['recepcionista','Recepcionista']];
 function element(tag,text,cls){const e=document.createElement(tag);if(text!=null)e.textContent=String(text);if(cls)e.className=cls;return e;}
 function action(text,fn,cls=''){const b=element('button',text,'civic-btn '+cls);b.type='button';b.onclick=fn;return b;}
 function labelled(parent,title,type='text',placeholder=''){const l=element('label',title,'civic-label'),i=document.createElement(type==='textarea'?'textarea':'input');if(type!=='textarea')i.type=type;i.placeholder=placeholder;l.append(i);parent.append(l);return i;}
@@ -12,7 +14,7 @@ const getActive=j=>j.connected&&['running','waiting'].includes(j.status);
 const DEPARTMENTS=[['cityhall','Prefeitura'],['police','Delegacia'],['library','Biblioteca'],['university','Universidade'],['talents','Central de Talentos'],['office','Escritórios de projetos']];
 function container(service,context){
  const [emoji,title,subtitle]=SERVICES[service]||['⌂','SAN TTOS','Cidade dos agentes'];
- const root=$('serviceContent');clear(root);root.append(element('span','AGENT CITY · V0.6','civic-eyebrow'));
+ const root=$('serviceContent');clear(root);root.append(element('span','AGENT CITY · V0.7','civic-eyebrow'));
  const h=element('h2',emoji+'  '+title);root.append(h,element('p',subtitle,'civic-subtitle'));
  const inner=element('div',null,'civic-body');root.append(inner);$('serviceModal').classList.remove('hidden');return inner;
 }
@@ -99,11 +101,11 @@ export async function openService(obj,context){const {api,store,toast,projects,c
  }else if(obj.service==='talents'){
   body.append(element('p','Cada cadastro cria nome e skin automaticamente. Tu escolhe função, setor e provedor. O personagem nasce e aparece na cidade imediatamente. Sua IA só trabalha depois de uma conexão real e de uma missão aprovada.'));
   const provider=options(body,'CONECTAR PROVEDOR',[['codex','Codex CLI'],['claude','Claude Code'],['gemini','Gemini CLI'],['ollama','Ollama local'],['manus','Manus API']]);
-  const role=options(body,'PROFISSÃO',ROLES);
+  const role=options(body,'PROFISSÃO',ROLES);const skin=options(body,'SKIN DO TALENTO',SKINS);
   const service=options(body,'LOCAL DE TRABALHO',DEPARTMENTS);
-  const roleDefaults={secretaria:'cityhall',bibliotecaria:'library',seguranca:'police',pesquisa:'university',engenharia:'university',gestao:'cityhall'};
+  const roleDefaults={secretaria:'cityhall',bibliotecaria:'library',seguranca:'police',pesquisa:'university',engenharia:'university',gestao:'office',recepcionista:'talents'};
   role.onchange=()=>{service.value=roleDefaults[role.value]||'office'};
-  body.append(action('✦ CRIAR PERSONAGEM',async()=>{try{const r=await api('civic/agent',{provider:provider.value,role:role.value,service:service.value});toast('Novo talento: '+r.agent.name);await openService(obj,context);}catch(e){toast(e.message)}},'primary'));
+  body.append(action('✦ CRIAR PERSONAGEM',async()=>{try{const r=await api('civic/agent',{provider:provider.value,role:role.value,service:service.value,spriteIndex:Number(skin.value)});toast('Novo talento: '+r.agent.name);await openService(obj,context);}catch(e){toast(e.message)}},'primary'));
   try{const data=await api('civic');body.append(element('h3','AGENTES CADASTRADOS'));if(!data.agents.length)body.append(element('p','Nenhum perfil criado.'));
     for(const a of data.agents){const card=nodeCard(body,a.name,a.role+' · '+a.provider+' · '+(DEPARTMENTS.find(x=>x[0]===a.service)?.[1]||a.service)+(a.projectId?' · ESCRITÓRIO '+a.projectId:' · DISPONÍVEL'));const swatch=element('span','■  SKIN GERADA','skin-swatch');swatch.style.color=a.skin?.outfit||'#a880e0';card.append(swatch);}
   }catch(e){body.append(element('p',e.message))}
@@ -116,16 +118,17 @@ export async function openOfficeTeam(project,context){
  const title=body.parentElement?.querySelector('h2');if(title)title.textContent='🏢  EQUIPE · '+project.name.toUpperCase();
  body.append(element('p','Escolhe um agente já criado na Central de Talentos e atribui uma função ao escritório. O personagem aparece na cidade mesmo enquanto sua IA estiver offline.'));
  const a=await api('civic');const optionsAgent=a.agents.map(agent=>[agent.id,agent.name+' · '+agent.role+(agent.projectId?' ('+agent.projectId+')':'')]);
- if(!optionsAgent.length){nodeCard(body,'Nenhum talento','Vai à Central de Talentos, cadastra um agente e volta aqui.');return;}
- const selected=options(body,'AGENTE DA CIDADE',optionsAgent);
- const profession=labelled(body,'FUNÇÃO NESTE PROJETO','text','Ex.: Gerente de QA, arquiteto do Playout');profession.maxLength=70;
- selected.onchange=()=>{profession.value=a.agents.find(x=>x.id===selected.value)?.officeFunction||a.agents.find(x=>x.id===selected.value)?.role||''};selected.onchange();
- body.append(action('DESIGNAR AO ESCRITÓRIO',async()=>{try{await api('civic/agent/assign',{agentId:selected.value,projectId:project.projectId,officeFunction:profession.value});toast('Agente designado');await openOfficeTeam(project,context)}catch(e){toast(e.message)}},'primary'));
- body.append(element('h3','EQUIPE DESIGNADA'));
- const assigned=a.agents.filter(x=>x.projectId===project.projectId);
- if(!assigned.length)nodeCard(body,'Escritório sem pessoal','Designa um agente acima.');
- for(const agent of assigned){const running=store.jobs.some(j=>j.agentId===agent.id&&j.connected&&['running','waiting'].includes(j.status));const card=nodeCard(body,agent.name,(agent.officeFunction||agent.role)+' · '+agent.provider+' · '+(running?'EM MISSÃO REAL':'CADASTRADO · AGUARDANDO IA'));
- card.append(action('LIBERAR DO ESCRITÓRIO',async()=>{try{await api('civic/agent/assign',{agentId:agent.id,projectId:null,officeFunction:agent.role});await openOfficeTeam(project,context)}catch(e){toast(e.message)}}));}
+ body.append(element('p','O Gerente é o agente principal. Código, QA, Tester, UX e Auxiliar são subagentes vinculados ao Gerente. Os perfis são cadastrados automaticamente; cada IA precisa de um provedor conectado e de aprovação para executar missões.'));
+ for(const slot of PROJECT_ROLES){
+  const agent=a.agents.find(x=>x.projectId===project.projectId&&roleOf(x)?.key===slot.key);
+  const card=nodeCard(body,slot.label+(slot.key==='manager'?' · AGENTE':' · SUBAGENTE'),agent?agent.name+' · '+(isWorking(agent.id,store.jobs)?'TRABALHANDO NO PRÉDIO':'DISPONÍVEL'):'Função sem perfil.');
+  if(!agent)continue;
+  const provider=options(card,'PROVEDOR DESTA FUNÇÃO',[['codex','Codex CLI'],['claude','Claude Code'],['gemini','Gemini CLI'],['ollama','Ollama local'],['manus','Manus API']]);provider.value=agent.provider;
+  card.append(action('SALVAR PROVEDOR',async()=>{try{await api('civic/project-agent',{agentId:agent.id,provider:provider.value});toast('Provedor salvo para '+slot.label);await openOfficeTeam(project,context)}catch(e){toast(e.message)}}));
+  if(context.selectAgent)card.append(action('PREPARAR MISSÃO PARA '+slot.label.toUpperCase(),()=>{$('serviceModal').classList.add('hidden');context.selectAgent(agent)},'primary'));
+ }
+ const extras=a.agents.filter(x=>x.projectId===project.projectId&&!x.projectRole);
+ for(const agent of extras)nodeCard(body,agent.name,agent.officeFunction||agent.role);
  body.append(element('h3','RECOMENDAÇÕES DA UNIVERSIDADE'));
  for(const suggestion of a.suggestions.filter(s=>s.projectId===project.projectId&&s.status==='nova').slice(-12).reverse()){
   const card=nodeCard(body,suggestion.repo,suggestion.reason+' · '+suggestion.evidence);
@@ -133,4 +136,44 @@ export async function openOfficeTeam(project,context){
  }
  body.append(element('h3','ALERTAS DA DELEGACIA'));
  for(const report of a.policeReports.filter(r=>r.projectId===project.projectId).slice(-6).reverse())nodeCard(body,report.repo,report.summary);
+}
+
+export function openAgentInfo(agent,context){
+ const body=container('talents',context);body.parentElement.querySelector('h2').textContent=agent.name;
+ body.parentElement.querySelector('.civic-subtitle').textContent=roleTitle(agent);
+ const manager=context.store&&agent.managerId;
+ nodeCard(body,agent.agentType==='subagent'?'SUBAGENTE':'AGENTE',manager?'Vinculado ao Gerente do projeto.':'Responsável pela sua função.');
+ nodeCard(body,'ATIVIDADE',isWorking(agent.id,context.store.jobs)?'Trabalhando dentro do prédio.':'Disponível.');
+ if(context.selectAgent)body.append(action('PREPARAR MISSÃO PARA ESTA FUNÇÃO',()=>{$('serviceModal').classList.add('hidden');context.selectAgent(agent)},'primary'));
+}
+export async function openStaff(staff,context){
+ const {api,toast,projects}=context,body=container(staff.service,context);
+ body.parentElement.querySelector('h2').textContent=staff.name;
+ body.parentElement.querySelector('.civic-subtitle').textContent=staff.role;
+ nodeCard(body,'FUNÇÃO',staff.task);
+ const run=async(endpoint)=>{try{toast(staff.name+' trabalhando...');const result=await api(endpoint,{});toast(result.result?.note||'Rotina concluída.')}catch(e){toast(e.message)}};
+ if(staff.id==='researcher')body.append(action('BUSCAR NOVIDADES NO GITHUB',()=>run('civic/research/run'),'primary'));
+ else if(staff.id==='engineer')body.append(action('ANALISAR READMES DA BIBLIOTECA',()=>run('civic/engineer/run'),'primary'));
+ else if(staff.id==='librarian'){
+  const q=labelled(body,'BUSCAR REPOSITÓRIOS','text','Nome ou tema');const results=element('div',null,'civic-results');
+  body.append(action('PESQUISAR',async()=>{try{const data=await api('library/search?q='+encodeURIComponent(q.value));clear(results);for(const repo of data.repos)nodeCard(results,repo.name,repo.description)}catch(e){toast(e.message)}},'primary'),results);
+  const data=await api('civic');for(const col of data.collections)nodeCard(body,col.name,col.repos.length+' repositórios catalogados');
+ }else if(staff.id==='secretary'){
+  const memo=labelled(body,'LEMBRETE','text','Prioridade ou tarefa');body.append(action('REGISTRAR LEMBRETE',async()=>{try{await api('civic/reminder',{message:memo.value});await openStaff(staff,context)}catch(e){toast(e.message)}},'primary'));
+  const data=await api('civic');for(const r of data.reminders.filter(x=>!x.done)){const card=nodeCard(body,r.message);card.append(action('CONCLUIR',async()=>{await api('civic/reminder/done',{id:r.id});await openStaff(staff,context)}));}
+ }else if(staff.id==='receptionist'){
+  const provider=options(body,'PROVEDOR',[['codex','Codex CLI'],['claude','Claude Code'],['gemini','Gemini CLI'],['ollama','Ollama local'],['manus','Manus API']]);
+  const skin=options(body,'SKIN DO TALENTO',SKINS);const role=options(body,'FUNÇÃO',ROLES),service=options(body,'SETOR',DEPARTMENTS);
+  role.onchange=()=>{service.value=({secretaria:'cityhall',bibliotecaria:'library',pesquisa:'university',engenharia:'university',seguranca:'police',recepcionista:'talents'})[role.value]||'office'};role.onchange();
+  body.append(action('CADASTRAR TALENTO',async()=>{try{const data=await api('civic/agent',{provider:provider.value,role:role.value,service:service.value,spriteIndex:Number(skin.value)});toast('Talento cadastrado: '+data.agent.name)}catch(e){toast(e.message)}},'primary'));
+ }else if(staff.service==='police'){
+  body.append(action('INSPECIONAR CÓDIGOS DOS PROJETOS',()=>run('civic/police/run'),'primary'));
+  const data=await api('civic');
+  if(staff.id==='chief'){
+   body.append(action(data.settings.policeEnabled?'DESATIVAR INSPEÇÃO AUTOMÁTICA':'ATIVAR INSPEÇÃO AUTOMÁTICA',async()=>{await api('civic/automation',{name:'police',enabled:!data.settings.policeEnabled});await openStaff(staff,context)}));
+   for(const report of data.policeReports.slice(-8).reverse())nodeCard(body,projects().find(p=>p.projectId===report.projectId)?.name||report.repo,report.summary);
+  }else for(const report of data.policeReports.slice(-5).reverse()){
+   const officer=report.officers?.find(o=>o.name===staff.name);if(officer)nodeCard(body,report.repo,officer.task+' · '+officer.findings.length+' achados');
+  }
+ }
 }
