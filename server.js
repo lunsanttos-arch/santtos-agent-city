@@ -50,7 +50,7 @@ function autoDepartments(){const settings=civic.getSettings(), now=Date.now();
 }
 
 const PROVIDERS=['codex','claude','gemini','ollama','manus','demo'];
-function publicJob(j){return {role:j.role||null,managerId:j.managerId||null,id:j.id,projectId:j.projectId,provider:j.provider,agentId:j.agentId||null,prompt:j.prompt,model:j.model,status:j.status,phase:j.phase,log:j.log.slice(-12000),created:j.created,updated:j.updated,remoteUrl:j.remoteUrl||null,connected:!!j.connected,changed:!!j.changed,prUrl:j.prUrl||null};}
+function publicJob(j){return {role:j.role||null,managerId:j.managerId||null,id:j.id,projectId:j.projectId,provider:j.provider,agentId:j.agentId||null,prompt:j.prompt,model:j.model,status:j.status,phase:j.phase,log:j.log.slice(-12000),created:j.created,updated:j.updated,remoteUrl:j.remoteUrl||null,connected:!!j.connected,changed:!!j.changed,changeSummary:j.changeSummary||'',prUrl:j.prUrl||null};}
 function pushLog(j,text){j.log=(j.log+String(text)).slice(-18000);j.updated=Date.now();}
 function state(){return {world,jobs:[...jobs.values()].reverse().slice(0,40).map(publicJob),providers:PROVIDERS,connections:{github:github.hasGithubAuth(),manus:!!process.env.MANUS_API_KEY,ollama:ollamaAvailable,localCli:detectedCli},online:'servidor local'};}
 let ollamaAvailable=false;let detectedCli=[];
@@ -65,7 +65,7 @@ function validateGithubProject(p){if(!p.github?.name)fail(422,'Conecte este pré
 function abortJob(j){j.cancelled=true;if(j.provider==='manus'&&j.remoteTaskId){void manusRequest('task.stop',{method:'POST',body:{task_id:j.remoteTaskId}}).catch(e=>pushLog(j,'Não foi possível parar a tarefa Manus remotamente: '+e.message+'\n'));}if(j.abortController)j.abortController.abort();if(j.child){try{if(process.platform==='win32'){cp.spawn('taskkill',['/PID',String(j.child.pid),'/T','/F'],{windowsHide:true});}else j.child.kill('SIGTERM');}catch{}}}
 function commandFor(j){
   const agent=j.agentId?civic.getAgent(j.agentId):null;const lesson=civic.lessonContext(agent?.role||'desenvolvimento');
-  const instruction='Função neste projeto: '+(agent?.officeFunction||'Código')+'. '+(agent?.managerId?'Subagente vinculado ao Gerente do projeto. ':'')+'Trabalhe somente na pasta deste projeto. Não execute deploy, push ou commit. Não manipule segredos. Faça uma mudança limitada e relatório de testes. Contexto de habilidades: '+lesson+'\nTarefa: '+j.prompt;
+  const instruction='Função neste projeto: '+(agent?.officeFunction||'Código')+'. '+(agent?.managerId?'Subagente vinculado ao Gerente do projeto. ':'')+'Trabalhe somente na pasta deste projeto. Não execute deploy, push ou commit. Não manipule segredos. Faça uma mudança limitada. Ao terminar, entregue um relato em português simples entre SANTTOS_RELATORIO_INICIO e SANTTOS_RELATORIO_FIM, com os títulos: Resultado, O que mudou, Testes e Próximos passos. Explique o efeito para o usuário, evite jargão e liste testes executados e seus resultados reais; declare os não executados e limitações. Não afirme que publicou no GitHub. Contexto de habilidades: '+lesson+'\nTarefa: '+j.prompt;
   if(j.provider==='codex')return ['codex',['exec','--sandbox','workspace-write',instruction]];
   if(j.provider==='claude')return ['claude',['-p','--permission-mode','acceptEdits',instruction]];
   return ['gemini',['-p',instruction,'--approval-mode','auto_edit']];
@@ -83,7 +83,7 @@ async function runCLI(j,p){
     }catch(e){finish(e);}
     var timer=setTimeout(()=>{abortJob(j);finish(Error('Tempo limite de 30 minutos'));},30*60*1000);
   });
-  j.changed=github.hasChanges(dir);if(j.changed){pushLog(j,'\nAlterações detectadas no checkout temporário. Nenhum push foi feito.\n'+github.diffSummary(dir)+'\nUse PUBLICAR PR para criar um Pull Request de revisão.\n');}else pushLog(j,'\nNenhuma alteração no repositório.\n');
+  j.changed=github.hasChanges(dir);j.changeSummary=j.changed?github.diffSummary(dir):'';if(j.changed){pushLog(j,'\nAlterações detectadas no checkout temporário. Nenhum push foi feito.\n'+j.changeSummary+'\nUse PUBLICAR PR para criar um Pull Request de revisão.\n');}else pushLog(j,'\nNenhuma alteração no repositório.\n');
 }
 async function runOllama(j){
   j.phase='pensando';const base=process.env.OLLAMA_URL||'http://127.0.0.1:11434';
