@@ -1,4 +1,4 @@
-# SanTTos Agent City v0.9.0 — Equipes de projeto e personagens da cidade
+# SanTTos Agent City v0.9.1 — Equipes de projeto e personagens da cidade
 
 Aplicação **local** em Node.js 20+, interface em português. Casas, cidade isométrica e interiores visitáveis. Código publicado para desenvolvimento colaborativo; não usa artes oficiais de Pokémon.
 
@@ -7,6 +7,10 @@ Aplicação **local** em Node.js 20+, interface em português. Casas, cidade iso
 Baixe o ZIP do repositório, extraia em uma pasta NOVA e execute **`INICIAR-SANTTOS-CITY.bat`**. Com Node.js instalado, o navegador abre `http://127.0.0.1:4317`. Feche qualquer servidor de uma versão anterior que ocupe a porta 4317. Pelo terminal: `npm test` e `npm start`. Não é necessário `npm install`.
 
 Os testes opcionais de interface são `node scripts/browser-smoke.cjs`, `node scripts/city-behavior-smoke.cjs`, `node scripts/city-controls-smoke.cjs` e `node scripts/city-visual-smoke.cjs`, com Playwright e Chromium disponíveis. Os dois últimos aceitam `SANTTOS_TEST_URL` para apontar para outra porta local e usam fixtures sem executar missões ou autorizar contas reais.
+
+## Correção v0.9.1
+
+Restaura a arte dos prédios da versão 0.8, preservando os PNGs originais. A renderização ajusta separadamente a projeção das duas fachadas para acompanhar os eixos 2:1 das ruas. Texturas do chão, personagens e correções de colisão e sobreposição são mantidas.
 
 ## Novidades v0.9
 

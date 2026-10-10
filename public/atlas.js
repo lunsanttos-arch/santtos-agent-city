@@ -18,7 +18,25 @@ const BUILDING_FRAMES=[
  [43,467,355,378],[470,467,341,378],[840,467,458,378],[1320,501,442,347]
 ];
 function buildingIndex(o){const variant=[...String(o.id||o.name||o.kind)].reduce((n,c)=>n+c.charCodeAt(0),0);return o.kind==='house'?variant%3:o.kind==='office'?4+variant%2:o.service==='university'?6:o.service==='talents'?3:7;}
-export function atlasBuildingHeight(o,width){const frame=BUILDING_FRAMES[buildingIndex(o)];return width*frame[3]/frame[2];}
+// Calibration of the existing artwork: front corner and both ground edges.
+// Only the drawing projection changes; the PNGs, colors and details are preserved.
+const BUILDING_BASES=[
+ [250,315,252,245],[270,314,255,230],[235,343,279,273],[245,329,277,258],
+ [211,376,310,303],[210,376,305,308],[337,376,292,298],[335,343,265,277]
+];
+export function buildingProjection(o,width){
+ const index=buildingIndex(o),frame=BUILDING_FRAMES[index],[front,base,leftBase,rightBase]=BUILDING_BASES[index];
+ const [, ,sw,sh]=frame,vertical=width/sw;
+ const ow=o.w??(o.kind==='house'?4:6),oh=o.h??(o.kind==='house'?4:5);
+ const leftWidth=ow*17,rightWidth=oh*17,frontY=(ow+oh)*4.25;
+ const leftY=frontY-ow*8.5,rightY=frontY-oh*8.5;
+ const left={sx:leftWidth/front,shear:(frontY-leftY-vertical*(base-leftBase))/front,tx:-(leftWidth+rightWidth)/2,ty:leftY-vertical*leftBase,start:0,end:front};
+ const right={sx:rightWidth/(sw-front),shear:(rightY-frontY-vertical*(rightBase-base))/(sw-front),tx:-(leftWidth+rightWidth)/2+leftWidth-rightWidth/(sw-front)*front,ty:0,start:front,end:sw};
+ right.ty=frontY-vertical*base-right.shear*front;
+ const top=Math.min(left.ty,left.ty+left.shear*front,right.ty+right.shear*front,right.ty+right.shear*sw);
+ return {frame,vertical,left,right,height:-top,frontX:left.tx+left.sx*front,frontY,sourceHeight:sh};
+}
+export function atlasBuildingHeight(o,width){return buildingProjection(o,width).height;}
 export function drawAtlasAgent(ctx, x, y, appearance, dir, walk, scale) {
   if(Number.isInteger(appearance.spriteIndex)&&staffAtlas?.complete&&staffAtlas.naturalWidth){
     // Cell zero is reserved exclusively for the human player's identity.
@@ -33,14 +51,16 @@ export function drawAtlasAgent(ctx, x, y, appearance, dir, walk, scale) {
   return false;
 }
 
-export function drawAtlasBuilding(ctx, o, center, width) {
-  if (!atlas?.complete || !atlas.naturalWidth) return false;
-  const [x,y,w,h]=BUILDING_FRAMES[buildingIndex(o)];
-  const source={x,y,w,h},height=atlasBuildingHeight(o,width);
-  ctx.save();ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(atlas, source.x, source.y, source.w, source.h,
-    Math.round(center.x - width / 2), Math.round(center.y - height + 10), Math.round(width), Math.round(height));
-  ctx.restore();return true;
+export function drawAtlasBuilding(ctx,o,center,width){
+ if(!atlas?.complete||!atlas.naturalWidth)return false;
+ const {frame,vertical,left,right}=buildingProjection(o,width),[x,y,w,h]=frame;
+ for(const face of [left,right]){
+  ctx.save();ctx.imageSmoothingEnabled=false;
+  ctx.transform(face.sx,face.shear,0,vertical,center.x+face.tx,center.y+face.ty);
+  ctx.beginPath();ctx.rect(face.start,0,face.end-face.start,h);ctx.clip();
+  ctx.drawImage(atlas,x,y,w,h,0,0,w,h);ctx.restore();
+ }
+ return true;
 }
 
 // Diamond textures are clipped to logical footprints, preventing gaps and overlap.
