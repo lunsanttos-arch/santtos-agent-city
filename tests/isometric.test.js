@@ -24,3 +24,16 @@ test('pessoas nas fachadas sul e leste são desenhadas depois do prédio; atrás
  for(const point of [{x:11,y:9.5},{x:9.5,y:11}]){const order=sceneDrawOrder([building],[{kind:'mayor',a:point}]);assert.equal(order[0].kind,'mayor');}
  const moved={...building,x:10.25,y:10.5};assert.equal(sceneDrawOrder([moved],[{kind:'mayor',a:{x:10.5,y:15.6}}])[1].kind,'mayor');
 });
+
+test('arte original é projetada com ambas as fachadas paralelas às ruas 2:1',async()=>{
+ const src=fs.readFileSync(path.join(__dirname,'..','public','atlas.js'),'utf8'),atlas=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+ for(const kind of ['house','office','service'])for(const id of ['a','b','c']){
+  const o={id,kind,service:'university',w:6,h:5},p=atlas.buildingProjection(o,207),front=p.left.end;
+  const point=(face,x,y)=>({x:face.sx*x+face.tx,y:face.shear*x+p.vertical*y+face.ty});
+  const vertex=point(p.left,front,(p.frontY-p.left.shear*front-p.left.ty)/p.vertical);
+  assert(Math.abs(vertex.x-p.frontX)<1e-8);assert(Math.abs(vertex.y-p.frontY)<1e-8);
+  const left={x:-(o.w+o.h)*17/2,y:p.frontY-o.w*8.5},right={x:(o.w+o.h)*17/2,y:p.frontY-o.h*8.5};
+  assert(Math.abs((vertex.y-left.y)/(vertex.x-left.x)-.5)<1e-8);assert(Math.abs((right.y-vertex.y)/(right.x-vertex.x)+.5)<1e-8);
+  assert(Number.isFinite(p.height));
+ }
+});

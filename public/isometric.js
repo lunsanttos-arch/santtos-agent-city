@@ -1,4 +1,4 @@
-import {drawAtlasGround,drawAtlasFountain} from './atlas.js';
+import {drawAtlasBuilding,atlasBuildingHeight,drawAtlasGround,drawAtlasFountain} from './atlas.js';
 // SanTTos Agent City — projeção isométrica original 2:1.
 // O tile lógico agora é 68 × 52; o mapa do editor e as salas 2D são preservados.
 export const ISO={tileWidth:34,tileHeight:17,originX:530,originY:92};
@@ -72,6 +72,7 @@ function frontDoor(ctx,o,z,accent){
  poly(ctx,quad(o.x+o.w*.43,o.y+o.h,o.w*.32,.24,1),'#d8c7a9','#877e69');
 }
 function drawBuilding(ctx,o,count){
+ const width=(o.w+o.h)*ISO.tileWidth/2+20;if(drawAtlasBuilding(ctx,o,projectIso(o.x+o.w/2,o.y+o.h/2),width)){signBoard(ctx,o,atlasBuildingHeight(o,width)-12,count);return;}
  const z=62,base=quad(o.x,o.y,o.w,o.h),top=quad(o.x,o.y,o.w,o.h,z);
  poly(ctx,[top[1],top[2],base[2],base[1]],'#c4cbbf','#718b8d');poly(ctx,[top[2],top[3],base[3],base[2]],'#eae3ce','#a9ac98');
  const styles={tv:['#a94b71','#e47990'],radar:['#487fa3','#6bb7c8'],office:['#7a66aa','#b5a0d4'],media:['#bc754e','#eab074'],chat:['#58a09d','#8bcfc0']};
@@ -79,6 +80,7 @@ function drawBuilding(ctx,o,count){
  wallWindows(ctx,base[1],base[2],z,4,'#a2d5f2');wallWindows(ctx,base[3],base[2],z,4,'#b1dee5');frontDoor(ctx,o,z,'#8bcbd2');signBoard(ctx,o,z,count);
 }
 function drawHouse(ctx,o){
+ if(drawAtlasBuilding(ctx,o,projectIso(o.x+o.w/2,o.y+o.h/2),(o.w+o.h)*ISO.tileWidth/2+16))return;
  const z=44,f=quad(o.x,o.y,o.w,o.h),r=quad(o.x,o.y,o.w,o.h,z);
  const skins=[{wall:'#fff0c9',trim:'#8c6c68',roof:['#a6445c','#e98690'],glass:'#a5dbe6'},
    {wall:'#e0f0ed',trim:'#587e84',roof:['#376f9e','#7fbed8'],glass:'#b4e6e7'},
@@ -112,6 +114,7 @@ function drawHouse(ctx,o){
 }
 const SERVICE_STYLES={cityhall:{walls:['#d6c9b3','#f2e9d5'],roof:['#62558c','#a08fbb'],label:'PREFEITURA',symbol:'★'},library:{walls:['#cfb99e','#f8dfbb'],roof:['#795b9e','#c5a3dd'],label:'BIBLIOTECA',symbol:'▤'},university:{walls:['#c6d6d3','#e8f5dc'],roof:['#547fa4','#91bfd7'],label:'UNIVERSIDADE',symbol:'✦'},police:{walls:['#afc4d8','#e6f0ee'],roof:['#405f9e','#8ab5e1'],label:'POLÍCIA',symbol:'◆'},talents:{walls:['#d7c4d7','#f8e1e4'],roof:['#a35c92','#e3a1c8'],label:'TALENTOS',symbol:'✧'}};
 function drawService(ctx,o){
+ const width=(o.w+o.h)*ISO.tileWidth/2+20;if(drawAtlasBuilding(ctx,o,projectIso(o.x+o.w/2,o.y+o.h/2),width)){signBoard(ctx,o,atlasBuildingHeight(o,width)-12,false);return;}
  const style=SERVICE_STYLES[o.service]||SERVICE_STYLES.cityhall,z=77,f=quad(o.x,o.y,o.w,o.h),r=quad(o.x,o.y,o.w,o.h,z);
  poly(ctx,[r[1],r[2],f[2],f[1]],style.walls[0],'#7d7985');poly(ctx,[r[2],r[3],f[3],f[2]],style.walls[1],'#8c8a8b');decorativeRoof(ctx,o,z,...style.roof,'#544b6c');
  wallWindows(ctx,f[1],f[2],z,Math.max(2,Math.floor(o.h/1.4)),'#b5e7ed');wallWindows(ctx,f[3],f[2],z,Math.max(2,Math.floor(o.w/1.4)),'#b2dcea');frontDoor(ctx,o,z,'#547c9e');
