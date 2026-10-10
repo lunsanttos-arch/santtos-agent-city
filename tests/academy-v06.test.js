@@ -38,7 +38,7 @@ test('Delegado consolida inspeções de dois policiais e registra ocorrências p
  const report=result.reports[0];assert.equal(report.officers.length,3);
  assert.ok(report.officers[0].findings.some(x=>x.id==='eval'));
  assert.ok(report.officers[1].findings.some(x=>x.id==='unpinned-dependency'));
- assert.equal(report.status,'enviado ao gerente');
+ assert.equal(report.status,'enviado à equipe do projeto');
 });
 test('Polícia detecta permissões elevadas, execuções remotas e versões não fixas',()=>{
  const report=security.inspectConfigFiles([{path:'package.json',content:'{"dependencies":{"a":"*"}}'},{path:'.github/workflows/check.yml',content:'permissions: write-all\non: pull_request_target:\nrun: curl https://example.com/install.sh | bash'}]);
