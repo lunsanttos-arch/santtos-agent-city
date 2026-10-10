@@ -2,7 +2,7 @@ import {interiorStaff,isWorking} from './city-behavior.js';
 // Interior environments have their own rooms and props, not generic office copies.
 // Staff illustrations are labelled as routines, never represented as authenticated AI sessions.
 const SERVICES={
- cityhall:{name:'PREFEITURA',theme:['#e8d0ad','#f5e6c9'],rooms:['RECEPÇÃO','GABINETE','ARQUIVO','SALA DO CONSELHO'],props:['desk','desk','shelves','meeting'],roles:['secretaria','gestao']},
+ cityhall:{name:'PREFEITURA',theme:['#e8d0ad','#f5e6c9'],rooms:['RECEPÇÃO','SECRETARIA DE OBRAS','ARQUIVO','SALA DO CONSELHO'],props:['desk','desk','shelves','meeting'],roles:['secretaria','gestao']},
  library:{name:'BIBLIOTECA',theme:['#d7c4a4','#eadbb9'],rooms:['CORREDOR DE LIVROS','ESTANTES & COLEÇÕES','CATÁLOGO GITHUB','MESA DE LEITURA'],props:['books','books','terminal','reading'],roles:['bibliotecaria','pesquisa']},
  university:{name:'UNIVERSIDADE',theme:['#c4d5d6','#e5eeee'],rooms:['SALA DE AULA 01','SALA DE AULA 02','CENTRO DE PESQUISA & LABORATÓRIO','OFICINA DE ENGENHARIA'],props:['class','class','computers','meeting'],roles:['pesquisa','engenharia']},
  police:{name:'DELEGACIA',theme:['#c1d3de','#e4ebf0'],rooms:['CENTRAL DE ALERTAS','SALA DO DELEGADO','ANÁLISE ESTÁTICA','RELATÓRIOS'],props:['monitor','desk','computers','shelves'],roles:['seguranca']},
@@ -49,7 +49,7 @@ function worker(c,draw,x,y,name,skin,time,speech){
 export function renderInterior(ctx,{service,world,jobs,civic,time,drawAgent,onBubble,tasks={},onActor}){
  const def=SERVICES[service];if(!def)return false;
  rect(ctx,0,0,960,648,'#243650');rect(ctx,17,17,926,593,'#937d70');rect(ctx,24,24,912,579,def.theme[0]);
- const agents=(civic.agents||[]).filter(a=>!a.projectId&&a.service===service);
+ const agents=(civic.agents||[]).filter(a=>!a.projectId&&!a.fixedStaff&&a.service===service);
  if(service==='university')universityRooms(ctx);
  else {
   const rooms=[{x:38,y:62,w:432,h:214},{x:490,y:62,w:430,h:214},{x:38,y:328,w:432,h:248},{x:490,y:328,w:430,h:248}];
@@ -62,9 +62,10 @@ export function renderInterior(ctx,{service,world,jobs,civic,time,drawAgent,onBu
  }
  label(ctx,def.name+'  •  INTERIOR',480,41,'#fff4e3',13);
  // Staff are civic routines with their own identities and function-specific interaction.
- for(const staff of interiorStaff(service,tasks)){
+ for(const base of interiorStaff(service,tasks)){
+  const profile=civic.agents?.find(a=>a.id===base.id),staff={...base,name:profile?.name||civic.staffNames?.find(a=>a.id===base.id)?.name||base.name};
   const x=staff.id==='librarian'?75+(Math.sin(time/1600)+1)*130:staff.x,y=staff.y;
-  const busy=staff.service==='police'?tasks.police?.busy:staff.id==='researcher'?tasks.research?.busy:staff.id==='engineer'?tasks.engineer?.busy:false;
+  const busy=staff.id==='works-secretary'?isWorking(staff.id,jobs):staff.service==='police'?tasks.police?.busy:staff.id==='researcher'?tasks.research?.busy:staff.id==='engineer'?tasks.engineer?.busy:false;
   worker(ctx,drawAgent,x,y,staff.name.toUpperCase(),{spriteIndex:staff.sprite},busy||staff.id==='librarian'?time:0,busy?'TRABALHANDO':staff.role.toUpperCase());
   onActor?.({x,y,staff});
  }

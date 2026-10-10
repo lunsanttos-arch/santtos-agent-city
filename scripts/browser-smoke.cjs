@@ -8,11 +8,11 @@ const {chromium} = require('playwright');
     const page = await browser.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.goto('http://127.0.0.1:4317');
+    await page.goto(process.env.SANTTOS_TEST_URL||'http://127.0.0.1:4317');
     await page.waitForFunction(() => document.getElementById('cursorInfo').textContent === '68 × 52');
     await page.waitForTimeout(500);
     assert.deepEqual(errors, []);
-    const asset = await page.request.get('http://127.0.0.1:4317/assets/building-atlas.png');
+    const asset = await page.request.get((process.env.SANTTOS_TEST_URL||'http://127.0.0.1:4317')+'/assets/building-atlas.png');
     assert.equal(asset.status(), 200);
     assert.equal(asset.headers()['content-type'], 'image/png');
     await page.evaluate(() => {
@@ -30,7 +30,7 @@ const {chromium} = require('playwright');
     }));
     const broken = await browser.newPage();
     await broken.route('**/app.js', route => route.abort());
-    await broken.goto('http://127.0.0.1:4317');
+    await broken.goto(process.env.SANTTOS_TEST_URL||'http://127.0.0.1:4317');
     await broken.waitForFunction(() => document.getElementById('toast').textContent.includes('Não foi possível iniciar'));
     console.log('Browser smoke OK: startup, atlas, render recovery and module error.');
   } finally { await browser.close(); }

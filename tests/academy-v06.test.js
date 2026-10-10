@@ -16,8 +16,8 @@ function mockGithub(url){
 test('agente nasce persistido e recebe lotação em escritório sem criar sessão de IA',()=>{
  const agent=civic.addAgent({provider:'ollama',role:'engenharia',service:'university'});
  assert.ok(agent.skin&&agent.name);assert.equal(agent.projectId,null);
- const assigned=civic.assignAgent({agentId:agent.id,projectId:'playout',officeFunction:'Engenheiro de áudio'},['playout','radar']);
- assert.equal(assigned.projectId,'playout');assert.equal(civic.all().agents.find(a=>a.id===agent.id).officeFunction,'Engenheiro de áudio');
+ const projectId='teste-'+randomUUID();const assigned=civic.assignAgent({agentId:agent.id,projectId,projectRole:'tester',officeFunction:'Tester'},[projectId,'radar']);
+ assert.equal(assigned.projectId,projectId);assert.equal(civic.all().agents.find(a=>a.id===agent.id).officeFunction,'Tester');
  assert.throws(()=>civic.assignAgent({agentId:agent.id,projectId:'unknown'},['playout']));
  assert.equal(civic.assignAgent({agentId:agent.id,projectId:null},['playout']).projectId,null);
 });
@@ -38,7 +38,7 @@ test('Delegado consolida inspeções de dois policiais e registra ocorrências p
  const report=result.reports[0];assert.equal(report.officers.length,3);
  assert.ok(report.officers[0].findings.some(x=>x.id==='eval'));
  assert.ok(report.officers[1].findings.some(x=>x.id==='unpinned-dependency'));
- assert.equal(report.status,'enviado ao gerente');
+ assert.equal(report.status,'enviado à equipe do projeto');
 });
 test('Polícia detecta permissões elevadas, execuções remotas e versões não fixas',()=>{
  const report=security.inspectConfigFiles([{path:'package.json',content:'{"dependencies":{"a":"*"}}'},{path:'.github/workflows/check.yml',content:'permissions: write-all\non: pull_request_target:\nrun: curl https://example.com/install.sh | bash'}]);

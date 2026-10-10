@@ -33,6 +33,7 @@ const campus=world.objects.find(o=>o.kind==='service'&&o.service==='university')
 if(campus&&campus.w===8&&campus.h===6){const future={...campus,w:10,h:8};if(!world.objects.some(o=>o.id!==campus.id&&o.x<future.x+future.w&&o.x+o.w>future.x&&o.y<future.y+future.h&&o.y+o.h>future.y)){campus.w=10;campus.h=8;world.revision++;persist();}}
 function persist(){fs.mkdirSync(path.dirname(DATA),{recursive:true});const p=DATA+'.tmp';fs.writeFileSync(p,JSON.stringify(world,null,2));fs.renameSync(p,DATA);}
 civic.ensureProjectTeams(world.objects.filter(o=>o.kind==='office'));
+civic.ensureWorksSecretary();
 const jobs=new Map();
 const tasks={research:{busy:false,last:0,result:null},engineer:{busy:false,last:0,result:null},police:{busy:false,last:0,result:null}};
 async function runDepartment(key,executor){
@@ -58,7 +59,7 @@ async function checkOllama(){try{const r=await fetch(new URL('/api/tags',process
 function fail(status,msg){const e=Error(msg);e.status=status;throw e;}
 function send(res,code,data){res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));}
 async function readJson(req){let text='';for await (const chunk of req){text+=chunk;if(text.length>64000)fail(413,'Payload muito grande');}try{return JSON.parse(text||'{}')}catch{fail(400,'JSON inválido')}}
-function project(id){const p=world.objects.find(o=>o.kind==='office'&&o.projectId===id);if(!p)fail(404,'Prédio/projeto não encontrado');return p;}
+function project(id){if(id==='city-works')return {projectId:'city-works',name:'Obras da SanTTos City',github:{name:'lunsanttos-arch/santtos-agent-city',branch:'main'}};const p=world.objects.find(o=>o.kind==='office'&&o.projectId===id);if(!p)fail(404,'Prédio/projeto não encontrado');return p;}
 function job(id){const j=jobs.get(id);if(!j)fail(404,'Missão não encontrada');return j;}
 function validateGithubProject(p){if(!p.github?.name)fail(422,'Conecte este prédio a um repositório do GitHub.');try{return github.lookupGithubRepo(p.github.name)}catch(e){fail(422,'GitHub: '+e.message)}}
 function abortJob(j){j.cancelled=true;if(j.provider==='manus'&&j.remoteTaskId){void manusRequest('task.stop',{method:'POST',body:{task_id:j.remoteTaskId}}).catch(e=>pushLog(j,'Não foi possível parar a tarefa Manus remotamente: '+e.message+'\n'));}if(j.abortController)j.abortController.abort();if(j.child){try{if(process.platform==='win32'){cp.spawn('taskkill',['/PID',String(j.child.pid),'/T','/F'],{windowsHide:true});}else j.child.kill('SIGTERM');}catch{}}}
@@ -192,6 +193,8 @@ function createApp(){return http.createServer(async(req,res)=>{
       if(url.pathname==='/api/github/connect'){try{return send(res,200,github.connectGithub());}catch(e){fail(503,e.message)}}
       if(url.pathname==='/api/civic/agent'){try{return send(res,201,{agent:civic.addAgent(b)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/project-agent'){if([...jobs.values()].some(j=>j.agentId===b.agentId&&['running','waiting','pending'].includes(j.status)))fail(409,'Conclua ou cancele a missão antes de trocar o provedor');try{return send(res,200,{agent:civic.configureProjectAgent(b,projectList().map(p=>p.projectId))});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/agent/name'){try{return send(res,200,{agent:civic.renameAgent(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/building/name'){const o=world.objects.find(o=>o.id===b.id&&['office','house','service'].includes(o.kind));if(!o)fail(404,'Edifício não encontrado');try{o.name=civic.checkedName(b.name);}catch(e){fail(400,e.message)}world.revision++;persist();return send(res,200,{world});}
       if(url.pathname==='/api/civic/agent/assign'){try{return send(res,200,{agent:civic.assignAgent(b,projectList().map(p=>p.projectId))});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/automation'){try{return send(res,200,{settings:civic.setAutomation(b.name,b.enabled)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/research/run')return send(res,200,await runDepartment('research',()=>academy.discover()));
@@ -229,13 +232,15 @@ function createApp(){return http.createServer(async(req,res)=>{
       if(url.pathname==='/api/job'){
         const p=project(b.projectId), provider=String(b.provider||''),prompt=String(b.prompt||'').trim();
         const agent=b.agentId?civic.getAgent(b.agentId):null;
+        if(p.projectId==='city-works'&&agent?.id!=='works-secretary')fail(422,'As obras da cidade são responsabilidade do Secretário de Obras');
         if(b.agentId&&(!agent||agent.provider!==provider))fail(422,'Agente não encontrado ou pertence a outro provedor');
         if(agent&&[...jobs.values()].some(j=>j.agentId===agent.id&&['running','waiting','pending'].includes(j.status)))fail(409,'Este agente já tem uma missão em andamento ou aguardando aprovação');
         if(agent?.projectId&&agent.projectId!==p.projectId)fail(422,'Este agente está designado para outro escritório');
         if(!PROVIDERS.includes(provider)||provider==='demo')fail(400,'Selecione um agente de IA real (modo demonstração desativado)');
         if(!p.github?.name)fail(422,'Vincule primeiro um repositório do GitHub a este projeto.');
+        if(p.projectId!=='city-works'&&(!agent||agent.projectId!==p.projectId||!['code','tester'].includes(agent.projectRole)))fail(422,'Escolha o Coder ou Tester deste projeto');
         if(prompt.length<4||prompt.length>5500)fail(400,'Missão deve ter entre 4 e 5500 caracteres');
-        const j={role:agent?.projectRole||null,managerId:agent?.managerId||null,id:randomUUID(),projectId:p.projectId,provider,agentId:agent?.id||null,model:String(b.model||'').slice(0,80),prompt,status:'pending',phase:'aguardando aprovação',log:'',created:Date.now(),updated:Date.now(),cancelled:false};
+        const j={role:agent?.projectRole||agent?.role||null,managerId:agent?.managerId||null,id:randomUUID(),projectId:p.projectId,provider,agentId:agent?.id||null,model:String(b.model||'').slice(0,80),prompt,status:'pending',phase:'aguardando aprovação',log:'',created:Date.now(),updated:Date.now(),cancelled:false};
         jobs.set(j.id,j);if(jobs.size>100){const old=[...jobs.values()].find(x=>!['running','pending'].includes(x.status));if(old)jobs.delete(old.id);}
         return send(res,201,{job:publicJob(j)});
       }

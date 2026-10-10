@@ -32,18 +32,26 @@ test('prefeitura, universidade e agencia de talentos possuem APIs reais',async()
  const civic=await fetch(base+'/api/civic');assert.equal(civic.status,200);const v=await civic.json();assert(Array.isArray(v.agents));
  const bad=await post('/api/civic/agent',{name:'A',provider:'sem-ia',role:'fake'});assert.equal(bad.status,400);
 });
-test('cada projeto possui Gerente e cinco subagentes com provedor configurável por função',async()=>{
+test('cada projeto possui Coder e Tester independentes com provedor configurável',async()=>{
  const state=await(await fetch(base+'/api/state')).json();
  const civic=await(await fetch(base+'/api/civic')).json();
  for(const project of state.world.objects.filter(o=>o.kind==='office')){
   const team=civic.agents.filter(a=>a.projectId===project.projectId&&a.projectRole);
-  assert.equal(team.length,6);const manager=team.find(a=>a.projectRole==='manager');
-  assert(team.filter(a=>a.id!==manager.id).every(a=>a.managerId===manager.id&&a.agentType==='subagent'));
+  assert.equal(team.length,2);assert.deepEqual(team.map(a=>a.projectRole),['code','tester']);
+  assert(team.every(a=>a.managerId===null&&a.agentType==='agent'));
  }
- const manager=civic.agents.find(a=>a.projectRole==='manager');
+ const manager=civic.agents.find(a=>a.projectRole==='code');
  const changed=await post('/api/civic/project-agent',{agentId:manager.id,provider:'ollama'});
  assert.equal(changed.status,200);assert.equal(changed.data.agent.provider,'ollama');
  await post('/api/civic/project-agent',{agentId:manager.id,provider:manager.provider});
  const invalid=await post('/api/civic/project-agent',{agentId:manager.id,provider:'fake'});assert.equal(invalid.status,400);
  const reserved=await post('/api/civic/agent',{provider:'codex',role:'qa',spriteIndex:0});assert.equal(reserved.status,400);
+});
+
+test('Secretário de Obras cria missão para o aplicativo e exige aprovação',async()=>{
+ const data=await(await fetch(base+'/api/civic')).json(),secretary=data.agents.find(a=>a.id==='works-secretary');assert(secretary.fixedStaff);assert.equal(secretary.service,'cityhall');
+ const denied=await post('/api/job',{projectId:'city-works',provider:'codex',prompt:'Melhorar a cidade'});assert.equal(denied.status,422);
+ const job=await post('/api/job',{projectId:'city-works',agentId:secretary.id,provider:secretary.provider,prompt:'Criar melhorias na cidade'});assert.equal(job.status,201);assert.equal(job.data.job.status,'pending');assert.equal(job.data.job.role,'obras');assert.equal(job.data.job.connected,false);
+ const duplicate=await post('/api/job',{projectId:'city-works',agentId:secretary.id,provider:secretary.provider,prompt:'Outra melhoria'});assert.equal(duplicate.status,409);
+ await post('/api/job/cancel',{id:job.data.job.id});
 });
