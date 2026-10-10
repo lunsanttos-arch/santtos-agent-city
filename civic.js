@@ -100,7 +100,7 @@ function recordSuggestion(data){
   db.suggestions.push(s);db.suggestions=db.suggestions.slice(-200);save();return s;
 }
 function updateSuggestion(id,status){const s=db.suggestions.find(x=>x.id===id);if(!s)throw Error('Sugestão não encontrada');if(!['lida','descartada','nova'].includes(status))throw Error('Status inválido');s.status=status;save();return s;}
-function recordPoliceReport(data){const r={id:randomUUID(),repo:String(data.repo||''),projectId:String(data.projectId||''),officers:data.officers,summary:String(data.summary||'').slice(0,500),created:Date.now(),status:'enviado ao gerente'};db.policeReports.push(r);db.policeReports=db.policeReports.slice(-70);save();return r;}
+function recordPoliceReport(data){const r={id:randomUUID(),repo:String(data.repo||''),projectId:String(data.projectId||''),officers:data.officers,summary:String(data.summary||'').slice(0,500),created:Date.now(),status:'enviado à equipe do projeto'};db.policeReports.push(r);db.policeReports=db.policeReports.slice(-70);save();return r;}
 
 function addLesson(b){const title=String(b.title||'').trim().slice(0,90),text=String(b.text||'').trim().slice(0,5000),role=String(b.role||'');if(title.length<3||text.length<10||!ROLES.has(role))throw Error('Lição inválida. Inclua título, área e instruções');const item={id:randomUUID(),title,text,role,created:Date.now()};db.lessons.push(item);save();return {id:item.id,title:item.title,role:item.role};}
 function lessonContext(role){return db.lessons.filter(x=>x.role===role).slice(-4).map(x=>x.title+': '+x.text).join('\n').slice(0,7000);}
