@@ -3,14 +3,20 @@
 // it is not a substitute for SAST, dependency scanning, or manual review.
 const MAX_FILES=18;
 const RULES=[
+ {id:'private-key',severity:'high',re:/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,message:'Chave privada exposta: remover e revogar a credencial'},
+ {id:'public-token',severity:'high',re:/\bgh[pousr]_[a-zA-Z0-9]{20,}\b/,message:'Possível token GitHub exposto: revogar e verificar acessos'},
+ {id:'password-literal',severity:'high',re:/\b(?:password|senha)\s*[:=]\s*['"][^'"\s]+['"]/i,message:'Possível senha fixa no código: retirar e usar gestão adequada de credenciais'},
+ {id:'password-storage',severity:'high',re:/\b(?:localStorage|sessionStorage)\.setItem\s*\(\s*['"](?:password|senha)['"]|\b(?:password|senha)\s*[:=]\s*(?:req\.(?:body|query)|request\.(?:form|json))\b/i,message:'Possível armazenamento de senha sem proteção: verificar hash apropriado e fluxo de autenticação'},
+ {id:'tls-disabled',severity:'high',re:/rejectUnauthorized\s*:\s*false|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['"]?0|verify\s*=\s*False/,message:'Verificação TLS desativada: risco de interceptação de dados e credenciais'},
+ {id:'destructive-command',severity:'high',re:/\brm\s+-rf\s+(?:\/|\$)|\bDROP\s+(?:DATABASE|TABLE)\b|\bTRUNCATE\s+TABLE\b/i,message:'Operação destrutiva: verificar autorização, escopo e possibilidade de recuperar os dados'},
  {id:'hardcoded-secret',severity:'high',re:/\b(?:api[_-]?key|access[_-]?token|secret[_-]?key|password)\s*[:=]\s*['"][^'"\s]{12,}['"]/i,message:'Possível segredo fixo no código'},
  {id:'shell',severity:'medium',re:/\b(?:exec|execSync|spawnSync)\s*\(/,message:'Execução de comandos: validar entrada'},
  {id:'eval',severity:'medium',re:/\beval\s*\(/,message:'Uso de eval: verificar entrada e remover se possível'},
- {id:'weak-crypto',severity:'low',re:/\b(?:md5|sha1)\s*\(/i,message:'Uso de hash antigo: revisar finalidade'},
+ {id:'weak-crypto',severity:'medium',re:/\b(?:md5|sha1)\s*\(|createHash\s*\(\s*['"](?:md5|sha1)['"]/i,message:'Hash antigo: inadequado para senhas; verificar finalidade e usar algoritmo apropriado'},
  {id:'innerHTML',severity:'medium',re:/\.innerHTML\s*=/,message:'HTML dinâmico: investigar riscos de XSS'}
 ];
 function scanSource(source,filename){const findings=[];for(const [i,line] of String(source).split(/\r?\n/).entries()){if(line.length>8000)continue;for(const rule of RULES){if(rule.re.test(line)){findings.push({file:filename,line:i+1,id:rule.id,severity:rule.severity,message:rule.message});if(findings.length>=30)return findings;}}}return findings;}
-function validRepo(name){return /^[\w.-]+\/[\w.-]+$/.test(name)&&name.length<150;}
+function validRepo(name){return typeof name==='string'&&/^[a-z\d][a-z\d_.-]*\/[a-z\d][a-z\d_.-]*$/i.test(name)&&name.length<150&&!name.includes('..')&&!name.endsWith('.git');}
 async function reviewPublicRepo(repo,fetchImpl=fetch){
  if(!validRepo(repo))throw Error('Nome do repositório inválido');
  const headers={'Accept':'application/vnd.github+json','User-Agent':'SanTTos-Agent-City'};
@@ -18,9 +24,11 @@ async function reviewPublicRepo(repo,fetchImpl=fetch){
  const info=await getApi('');if(info.private)throw Error('Auditoria pública não pode acessar repositórios privados');
  const branch=encodeURIComponent(info.default_branch||'main');const tree=await getApi('git/trees/'+branch+'?recursive=1');
  if(tree.truncated)throw Error('Árvore muito grande; auditoria incompleta. Escopo menor necessário');
- const sources=(tree.tree||[]).filter(f=>f.type==='blob'&&f.size<=35000&&/\.(?:js|jsx|ts|tsx|py|sh|go|rs|php|java|rb)$/.test(f.path)&&!/(^|\/)(node_modules|dist|build|vendor|\.git|tests|test|__tests__)\//.test(f.path)).slice(0,MAX_FILES);
- const findings=[];let reviewed=0;for(const file of sources){try{const result=await getApi('contents/'+file.path.split('/').map(encodeURIComponent).join('/')+'?ref='+branch);if(result.encoding!=='base64'||!result.content)continue;const text=Buffer.from(result.content,'base64').toString('utf8');findings.push(...scanSource(text,file.path));reviewed++;}catch(e){if(String(e.message).includes('403'))throw e;}}
- return {repo,filesReviewed:reviewed,filesCandidate:sources.length,findings:findings.slice(0,75),status:'triagem parcial',note:'Heurística de até 18 arquivos públicos pequenos. Não é auditoria completa nem prova de segurança.'};
+ const candidates=(tree.tree||[]).filter(f=>f.type==='blob'&&f.size<=35000&&(/\.(?:js|jsx|ts|tsx|py|sh|go|rs|php|java|rb|pem|key)$/.test(f.path)||/(?:^|\/)\.env(?:\.[\w-]+)?$/.test(f.path)||f.path==='package.json'||/^\.github\/workflows\/[^/]+\.ya?ml$/.test(f.path))&&!/(^|\/)(node_modules|dist|build|vendor|\.git|tests|test|__tests__)\//.test(f.path));
+ const priority=f=>/(?:password|auth|login|security|database|backup|\.env|\.pem|\.key|package\.json|\.github)/i.test(f.path)?0:1;
+ const sources=candidates.sort((a,b)=>priority(a)-priority(b)||a.path.localeCompare(b.path)).slice(0,MAX_FILES);
+ const findings=[],skipped=[];let reviewed=0;for(const file of sources){try{const result=await getApi(file.sha?'git/blobs/'+encodeURIComponent(file.sha):'contents/'+file.path.split('/').map(encodeURIComponent).join('/')+'?ref='+branch);if(result.encoding!=='base64'||!result.content){skipped.push(file.path);continue;}const text=Buffer.from(result.content,'base64').toString('utf8');findings.push(...scanSource(text,file.path),...inspectConfigFiles([{path:file.path,content:text}]));reviewed++;}catch(e){if(String(e.message).includes('403'))throw e;skipped.push(file.path);}}
+ return {repo,revision:tree.sha||null,filesReviewed:reviewed,filesCandidate:candidates.length,filesSkipped:skipped.length,findings:findings.sort((a,b)=>({high:0,medium:1,low:2}[a.severity])-({high:0,medium:1,low:2}[b.severity])).slice(0,75),status:'triagem parcial',note:'Inspeção estática de até 18 arquivos públicos pequenos, priorizando segurança e configurações. Não executa código nem confirma ausência de vulnerabilidades; dependências, permissões em produção e recuperação de backups exigem verificação adicional.'};
 }
 module.exports={scanSource,reviewPublicRepo,validRepo};
 

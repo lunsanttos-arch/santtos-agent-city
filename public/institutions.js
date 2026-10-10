@@ -10,6 +10,16 @@ function labelled(parent,title,type='text',placeholder=''){const l=element('labe
 function options(parent,title,values){const l=element('label',title,'civic-label'),s=document.createElement('select');for(const [id,label] of values){const o=new Option(label,id);s.add(o)}l.append(s);parent.append(l);return s;}
 function clear(node){node.replaceChildren()}
 function nodeCard(parent,title,description){const box=element('div',null,'civic-card');box.append(element('strong',title));if(description)box.append(element('p',description));parent.append(box);return box;}
+function libraryReviewCard(parent,repo,db,context,refresh){
+ const review=(db.libraryReviews||[]).find(r=>r.repo.toLowerCase()===repo.toLowerCase());
+ const labels={pending:'INSPEÇÃO EM ANDAMENTO',quarantine:'RISCO ALTO · NÃO INCORPORAR',attention:'ATENÇÃO · REVISAR ACHADOS',partial:'ANÁLISE PARCIAL · SEM ALERTAS',incomplete:'INSPEÇÃO INCOMPLETA',unavailable:'NÃO VERIFICADO'};
+ const card=nodeCard(parent,repo+' · '+(labels[review?.verdict]||'AGUARDANDO INSPEÇÃO'),review?.summary||'A Delegacia ainda precisa revisar este repositório.');
+ if(review){card.append(element('p',`${review.filesReviewed} de ${review.filesCandidate} arquivos elegíveis examinados · ${review.filesSkipped} não puderam ser lidos · ${new Date(review.checkedAt).toLocaleString('pt-BR')}`));card.append(element('p',review.note));
+  if(review.findings.length){const details=element('details'),summary=element('summary','VER ACHADOS DE SEGURANÇA');details.append(summary);for(const f of review.findings)nodeCard(details,f.file+':'+f.line,({high:'RISCO ALTO',medium:'ATENÇÃO',low:'OBSERVAÇÃO'}[f.severity]||f.severity)+' · '+f.message);card.append(details);}
+ }
+ card.append(action('REINSPECIONAR',async()=>{try{context.toast('A Delegacia está lendo os arquivos públicos...');await context.api('civic/library/review',{repo});await refresh();}catch(e){context.toast(e.message)}}));
+ return card;
+}
 const getActive=j=>j.connected&&['running','waiting'].includes(j.status);
 const DEPARTMENTS=[['cityhall','Prefeitura'],['police','Delegacia'],['library','Biblioteca'],['university','Universidade'],['talents','Central de Talentos'],['office','Escritórios de projetos']];
 function container(service,context){
@@ -37,16 +47,17 @@ export async function openService(obj,context){const {api,store,toast,projects,c
  }else if(obj.service==='library'){
   const q=labelled(body,'PESQUISAR REPOSITÓRIOS PÚBLICOS','text','Ex.: pixel art engine, lunsanttos-arch...');q.maxLength=120;
   const results=element('div',null,'civic-results');body.append(action('⌕ PESQUISAR NO GITHUB',async()=>{clear(results);results.append(element('p','Consultando GitHub...'));try{const r=await api('library/search?q='+encodeURIComponent(q.value));clear(results);if(!r.repos.length)results.append(element('p','Nenhum resultado.'));r.repos.forEach(repo=>{const card=nodeCard(results,repo.name,(repo.description||'Sem descrição').slice(0,220)+' · ⭐ '+repo.stars);card.append(action('VINCULAR A PRÉDIO',()=>{clear(results);results.append(element('h3','Escolha um projeto'));projects().forEach(p=>results.append(action(p.name,async()=>{try{await api('project',{id:p.projectId,github:repo.name});toast('Repositório vinculado: '+repo.name);await openService(obj,context);}catch(e){toast(e.message)}},'wide')));},'primary'));});}catch(e){clear(results);results.append(element('p',e.message))}},'primary'),results);
+  body.append(element('p','Todo repositório guardado ou descoberto recebe uma inspeção de segurança da Delegacia. Riscos altos ficam fora das sugestões do Engenheiro. A análise é parcial e não executa o código.'));
   body.append(element('h3','COLEÇÕES & PERFIS DA BIBLIOTECA'));
   const col=labelled(body,'NOVA COLEÇÃO','text','Ex.: Inspirações para Playout');col.maxLength=80;
   body.append(action('CRIAR COLEÇÃO',async()=>{try{await api('civic/collection',{name:col.value});toast('Coleção criada');await openService(obj,context)}catch(e){toast(e.message)}},'primary'));
   const person=labelled(body,'PERFIL GITHUB','text','Ex.: lunsanttos-arch');person.maxLength=39;
   body.append(action('CADASTRAR PERFIL',async()=>{try{await api('civic/profile',{username:person.value});toast('Perfil registrado');await openService(obj,context)}catch(e){toast(e.message)}},'primary'));
   const existing=await api('civic');
-  for(const c of existing.collections||[]){const card=nodeCard(body,'📚 '+c.name,`${c.repos.length} repositórios`);const repoInput=labelled(card,'REPOSITÓRIO owner/repo','text','Ex.: nodejs/node');card.append(action('GUARDAR NA COLEÇÃO',async()=>{try{await api('civic/collection/repo',{collectionId:c.id,repo:repoInput.value});await openService(obj,context)}catch(e){toast(e.message)}}));for(const repo of c.repos||[])card.append(element('small','▣ '+repo));}
+  for(const c of existing.collections||[]){const card=nodeCard(body,'📚 '+c.name,`${c.repos.length} repositórios`);const repoInput=labelled(card,'REPOSITÓRIO owner/repo','text','Ex.: nodejs/node');card.append(action('GUARDAR NA COLEÇÃO',async()=>{try{await api('civic/collection/repo',{collectionId:c.id,repo:repoInput.value});await openService(obj,context)}catch(e){toast(e.message)}}));for(const repo of c.repos||[])libraryReviewCard(card,repo,existing,context,()=>openService(obj,context));}
   for(const p of existing.profiles||[])nodeCard(body,'@'+p.username,'Perfil guardado na Biblioteca');
   body.append(element('h3','ARQUIVOS GUARDADOS · ÍNDICE README'));for(const f of (existing.fileIndex||[]).slice(-15))nodeCard(body,'▤ '+f.repo+' / '+f.path,f.excerpt);
-  body.append(element('h3','ACHADOS ORGANIZADOS PELA BIBLIOTECÁRIA'));for(const d of (existing.discoveries||[]).slice(-16).reverse())nodeCard(body,'📖 '+d.repo,(d.topic||'descoberta')+' · '+(d.description||'Sem descrição').slice(0,140));
+  body.append(element('h3','ACHADOS ORGANIZADOS PELA BIBLIOTECÁRIA'));for(const d of (existing.discoveries||[]).slice(-16).reverse())libraryReviewCard(body,d.repo,existing,context,()=>openService(obj,context));
   q.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();body.querySelector('.civic-btn.primary').click();}});
  }else if(obj.service==='university'){
   body.append(element('p','Campus ampliado: duas salas de aula e um laboratório de pesquisa. O Pesquisador descobre repositórios públicos; o Engenheiro lê READMEs e encaminha sugestões aos gerentes. As análises são heurísticas e não fazem alterações no GitHub.'));
@@ -81,7 +92,7 @@ export async function openService(obj,context){const {api,store,toast,projects,c
   body.append(action('SALVAR AULA',async()=>{try{await api('civic/lesson',{title:title.value,role:role.value,text:instructions.value});toast('Aula registrada');await openService(obj,context)}catch(e){toast(e.message)}},'primary'));
   for(const l of last.lessons.slice(-10).reverse())nodeCard(body,l.title,l.role);
  }else if(obj.service==='police'){
-  body.append(element('p','Delegado e dois policiais trabalham por divisão de tarefas. Policial 01 varre padrões perigosos; Policial 02 revisa possíveis segredos e execução de comandos; o Delegado consolida relatórios para os gerentes de projeto. É uma inspeção parcial de repositórios públicos, não uma auditoria completa.'));
+  body.append(element('p','A Delegacia procura riscos de invasão, credenciais expostas e perda de dados nos projetos e nos repositórios que chegam à Biblioteca. O Delegado reúne os achados e orienta a equipe. É uma inspeção parcial de repositórios públicos, não uma auditoria completa.'));
   const saved=await api('civic');const status=await api('civic/departments');
   body.append(element('h3','EQUIPE DA DELEGACIA'));
   for(const [n,t] of [['👮 DELEGADO','Coordenação e encaminhamento ao gerente'],['🔍 POLICIAL 01','Análise estática por regras'],['🛡 POLICIAL 02','Triagem de credenciais e comandos']])nodeCard(body,n,t);
@@ -89,7 +100,9 @@ export async function openService(obj,context){const {api,store,toast,projects,c
   body.append(action('🚓 DELEGADO · FISCALIZAR PROJETOS VINCULADOS',async()=>{try{toast('Analisando repositórios públicos...');await api('civic/police/run',{});await openService(obj,context);toast('Relatórios encaminhados aos gerentes.')}catch(e){toast(e.message)}},'primary'));
   const latest=status.tasks?.police;
   nodeCard(body,latest?.busy?'RONDA EM CURSO':'RONDA PRONTA',latest?.result?.error||'Vincule repositórios públicos aos escritórios para inspecioná-los.');
-  body.append(element('h3','RELATÓRIOS AO AGENTE GERENTE'));
+  body.append(element('h3','SEGURANÇA DOS REPOSITÓRIOS DA BIBLIOTECA'));
+  for(const review of (saved.libraryReviews||[]).slice(-15).reverse())libraryReviewCard(body,review.repo,saved,context,()=>openService(obj,context));
+  body.append(element('h3','RELATÓRIOS À EQUIPE DO PROJETO'));
   if(!saved.policeReports.length)nodeCard(body,'Sem relatórios','Execute a fiscalização para gerar relatórios.');
   for(const report of saved.policeReports.slice(-12).reverse()){
     const card=nodeCard(body,'🚨 '+(projects().find(p=>p.projectId===report.projectId)?.name||report.repo),report.summary+' · '+new Date(report.created).toLocaleString('pt-BR'));

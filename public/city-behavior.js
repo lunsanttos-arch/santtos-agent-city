@@ -6,13 +6,13 @@ export const PLAYER_SKIN = Object.freeze({player:true,spriteIndex:0});
 export const STAFF = [
  {id:'secretary',name:'Secretária',role:'Secretária',service:'cityhall',sprite:1,x:244,y:224,task:'Organiza os lembretes e prioridades.'},
  {id:'works-secretary',name:'Secretário de Obras',role:'Secretário de Obras',service:'cityhall',sprite:9,x:704,y:224,task:'Recebe pedidos, cria funcionalidades e melhora a própria SanTTos City por missões de IA no repositório do aplicativo.'},
- {id:'librarian',name:'Bibliotecária',role:'Bibliotecária',service:'library',sprite:2,x:235,y:520,task:'Pesquisa e organiza o catálogo de repositórios.'},
+ {id:'librarian',name:'Bibliotecária',role:'Bibliotecária',service:'library',sprite:2,x:235,y:520,task:'Organiza repositórios e apresenta o parecer de segurança da Delegacia antes de recomendar seu uso.'},
  {id:'researcher',name:'Pesquisador',role:'Pesquisador',service:'university',sprite:3,x:388,y:507,task:'Busca novidades em repositórios públicos do GitHub.'},
  {id:'engineer',name:'Engenheiro',role:'Engenheiro',service:'university',sprite:4,x:601,y:507,task:'Analisa READMEs e envia sugestões ao Coder e Tester.'},
  {id:'receptionist',name:'Recepcionista',role:'Recepcionista',service:'talents',sprite:5,x:250,y:230,task:'Recebe visitantes e cadastra novos talentos.'},
  {id:'chief',name:'Delegado',role:'Delegado',service:'police',sprite:6,x:225,y:240,task:'Coordena a inspeção automática e entrega relatórios às equipes dos projetos.'},
- {id:'code-officer',name:'Policial de Código',role:'Policial de Código',service:'police',sprite:7,x:635,y:248,task:'Inspeciona padrões de risco nos códigos públicos dos projetos.'},
- {id:'credentials-officer',name:'Policial de Credenciais',role:'Policial de Credenciais',service:'police',sprite:8,x:700,y:514,task:'Verifica possíveis segredos, dependências e workflows.'}
+ {id:'code-officer',name:'Policial de Código',role:'Policial de Código',service:'police',sprite:7,x:635,y:248,task:'Procura falhas de segurança e operações que podem perder dados nos projetos e na Biblioteca.'},
+ {id:'credentials-officer',name:'Policial de Credenciais',role:'Policial de Credenciais',service:'police',sprite:8,x:700,y:514,task:'Verifica senhas, credenciais expostas, criptografia e configurações dos projetos e da Biblioteca.'}
 ];
 export function roleOf(agent){
  return PROJECT_ROLES.find(r=>r.key===agent.projectRole)
