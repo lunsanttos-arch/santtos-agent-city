@@ -51,23 +51,44 @@ function cloneForJob(repo, id){
   const dir=path.join(workspace,'repo');
   try{
     invoke('gh',['repo','clone',repo.name,dir,'--','--depth','1','--branch',repo.branch],{timeout:120000});
-    // O agente não deve publicar; só uma segunda ação explícita pode criar o PR.
+    // A execução da IA não tem push livre; a cidade publica pela opção autorizada.
     invoke('git',['remote','set-url','--push','origin','DISABLED_BY_SANTTOS_CITY'],{cwd:dir});
     return {workspace,dir};
   }catch(e){fs.rmSync(workspace,{recursive:true,force:true});throw e;}
 }
 function hasChanges(dir){return !!invoke('git',['status','--porcelain'],{cwd:dir,timeout:10000});}
 function diffSummary(dir){return invoke('git',['diff','--stat'],{cwd:dir})+'\n'+invoke('git',['status','--short'],{cwd:dir});}
+function publishCommit(j,repo){
+  checkedRepo(repo.name);
+  if(!j.workDir||!fs.existsSync(j.workDir))throw Error('Workspace temporário da missão não encontrado');
+  if(repo.canPush===false)throw Error('Sua conta não tem permissão de escrita neste repositório.');
+  const dir=j.workDir, branch=repo.branch;
+  invoke('git',['check-ref-format',`refs/heads/${branch}`],{cwd:dir});
+  const remote=`https://github.com/${repo.name}.git`;
+  invoke('git',['fetch',remote,`refs/heads/${branch}`],{cwd:dir,timeout:120000});
+  const remoteHead=invoke('git',['rev-parse','FETCH_HEAD'],{cwd:dir});
+  if(j.commitSha&&remoteHead===j.commitSha)return {sha:j.commitSha,url:`https://github.com/${repo.name}/commit/${j.commitSha}`};
+  if(remoteHead!==j.baseCommit)throw Error('A branch recebeu alterações desde o início da missão. Crie uma nova missão com a versão atual ou publique um PR. Nenhuma alteração remota foi sobrescrita.');
+  if(!j.commitSha){
+    if(!hasChanges(dir))throw Error('A missão não modificou arquivos');
+    invoke('git',['add','-A'],{cwd:dir});
+    invoke('git',['-c','user.name=SanTTos Agent City','-c','user.email=santtos-agent@users.noreply.github.com','commit','-m',`Agent City: ${j.prompt.replace(/\s+/g,' ').slice(0,65)}`],{cwd:dir});
+    j.commitSha=invoke('git',['rev-parse','HEAD'],{cwd:dir});
+  }
+  // Use an explicit remote and ref; never force or leave agent push access enabled.
+  invoke('git',['push',remote,`${j.commitSha}:refs/heads/${branch}`],{cwd:dir,timeout:120000});
+  return {sha:j.commitSha,url:`https://github.com/${repo.name}/commit/${j.commitSha}`};
+}
 function publishPR(j,repo){
   if(!j.workDir||!fs.existsSync(j.workDir))throw Error('Workspace temporário da missão não encontrado');
-  const dir=j.workDir; if(repo.canPush===false)throw Error('Sem permissão de escrita. Fork o repositório para criar um PR.'); if(!hasChanges(dir))throw Error('A missão não modificou arquivos');
+  const dir=j.workDir; if(repo.canPush===false)throw Error('Sem permissão de escrita. Fork o repositório para criar um PR.'); if(!hasChanges(dir)&&!j.commitSha)throw Error('A missão não modificou arquivos');
   const branch='santtos-agent/'+j.id.slice(0,8);
   invoke('git',['checkout','-b',branch],{cwd:dir});
-  invoke('git',['add','-A'],{cwd:dir});
-  invoke('git',['-c','user.name=SanTTos Agent City','-c','user.email=santtos-agent@users.noreply.github.com','commit','-m',`Agent City: ${j.prompt.replace(/\s+/g,' ').slice(0,65)}`],{cwd:dir});
+  if(!j.commitSha){invoke('git',['add','-A'],{cwd:dir});
+  invoke('git',['-c','user.name=SanTTos Agent City','-c','user.email=santtos-agent@users.noreply.github.com','commit','-m',`Agent City: ${j.prompt.replace(/\s+/g,' ').slice(0,65)}`],{cwd:dir});}
   invoke('git',['remote','set-url','--push','origin',`https://github.com/${checkedRepo(repo.name)}.git`],{cwd:dir});
   invoke('git',['push','-u','origin',branch],{cwd:dir,timeout:120000});
   const url=invoke('gh',['pr','create','--repo',repo.name,'--base',repo.branch,'--head',branch,'--title',`SanTTos Agent City: ${j.prompt.slice(0,65)}`,'--body',`Mudanças propostas pela missão ${j.id}.\n\nRevisar o diff e os testes antes de aprovar o merge.`, '--draft'],{cwd:dir,timeout:60000});
   return url.match(/https:\/\/github\.com\/\S+/)?.[0]||url;
 }
-module.exports={githubStatus,connectGithub,checkedRepo,hasGithubAuth,listGithubRepos,lookupGithubRepo,cloneForJob,hasChanges,diffSummary,publishPR,invoke};
+module.exports={githubStatus,connectGithub,checkedRepo,hasGithubAuth,listGithubRepos,lookupGithubRepo,cloneForJob,hasChanges,diffSummary,publishPR,publishCommit,invoke};

@@ -157,10 +157,11 @@ export async function openStaff(staff,context){
  const run=async(endpoint)=>{try{toast(staff.name+' trabalhando...');const result=await api(endpoint,{});toast(result.result?.note||'Rotina concluída.')}catch(e){toast(e.message)}};
  if(staff.id==='works-secretary'){
   const data=await api('civic'),agent=data.agents.find(a=>a.id===staff.id);
-  body.append(element('p','Peça uma funcionalidade, correção ou melhoria da própria SanTTos City. A IA trabalha em um clone do repositório; depois você revisa e publica um PR pelo painel MISSÕES.'));
+  body.append(element('p','Peça uma funcionalidade, correção ou melhoria da própria SanTTos City. A IA trabalha em um clone do repositório; você pode publicar um commit direto ou um PR pelo painel MISSÕES.'));
   const provider=options(body,'PROVEDOR DE IA',[['codex','Codex CLI'],['claude','Claude Code'],['gemini','Gemini CLI'],['ollama','Ollama (planejamento)'],['manus','Manus API']]);provider.value=agent?.provider||'codex';
   const prompt=labelled(body,'PEDIDO DE OBRA','textarea','Descreva o que quer criar ou melhorar na cidade');
-  body.append(action('CRIAR MISSÃO DE MELHORIA',async()=>{try{await api('civic/project-agent',{agentId:staff.id,provider:provider.value});await api('job',{projectId:'city-works',agentId:staff.id,provider:provider.value,prompt:prompt.value});toast('Missão do Secretário criada. Abra MISSÕES para aprovar.');$('serviceModal').classList.add('hidden');context.showMissions?.();}catch(e){toast(e.message)}},'primary'));
+  const publishLabel=element('label',null,'publish-choice'),publishDirect=element('input');publishDirect.type='checkbox';publishLabel.append(publishDirect,document.createTextNode('Publicar commit no GitHub ao concluir (sem PR)'));body.append(publishLabel);
+  body.append(action('CRIAR MISSÃO DE MELHORIA',async()=>{try{await api('civic/project-agent',{agentId:staff.id,provider:provider.value});await api('job',{projectId:'city-works',agentId:staff.id,provider:provider.value,prompt:prompt.value,publishDirect:publishDirect.checked});toast('Missão do Secretário criada. Abra MISSÕES para aprovar.');$('serviceModal').classList.add('hidden');context.showMissions?.();}catch(e){toast(e.message)}},'primary'));
  }else if(staff.id==='researcher')body.append(action('BUSCAR NOVIDADES NO GITHUB',()=>run('civic/research/run'),'primary'));
  else if(staff.id==='engineer')body.append(action('ANALISAR READMES DA BIBLIOTECA',()=>run('civic/engineer/run'),'primary'));
  else if(staff.id==='librarian'){

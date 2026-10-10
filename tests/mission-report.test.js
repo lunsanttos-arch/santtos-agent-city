@@ -7,6 +7,7 @@ test('mission report distinguishes approval, local changes and published PR', as
   assert.match(missionReport({status:'pending'}).next, /APROVAR/);
   assert.match(missionReport({status:'completed',changed:true}).next, /PUBLICAR PR/);
   assert.match(missionReport({status:'completed',changed:true,prUrl:'https://github.com/example/pr/1'}).next, /Abra o PR/);
+  assert.match(missionReport({status:'completed',commitUrl:'https://github.com/owner/repo/commit/123'}).summary, /publicadas no GitHub/);
   assert.match(missionReport({status:'completed'}).summary, /Nenhuma alteração/);
   assert.match(missionReport({status:'completed',log:'tests passed'}).tests, /não confirma/);
 });

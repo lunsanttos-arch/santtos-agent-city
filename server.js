@@ -50,7 +50,7 @@ function autoDepartments(){const settings=civic.getSettings(), now=Date.now();
 }
 
 const PROVIDERS=['codex','claude','gemini','ollama','manus','demo'];
-function publicJob(j){return {role:j.role||null,managerId:j.managerId||null,id:j.id,projectId:j.projectId,provider:j.provider,agentId:j.agentId||null,prompt:j.prompt,model:j.model,status:j.status,phase:j.phase,log:j.log.slice(-12000),created:j.created,updated:j.updated,remoteUrl:j.remoteUrl||null,connected:!!j.connected,changed:!!j.changed,changeSummary:j.changeSummary||'',prUrl:j.prUrl||null};}
+function publicJob(j){return {role:j.role||null,managerId:j.managerId||null,id:j.id,projectId:j.projectId,provider:j.provider,agentId:j.agentId||null,prompt:j.prompt,model:j.model,status:j.status,phase:j.phase,log:j.log.slice(-12000),created:j.created,updated:j.updated,remoteUrl:j.remoteUrl||null,connected:!!j.connected,changed:!!j.changed,changeSummary:j.changeSummary||'',prUrl:j.prUrl||null,commitUrl:j.commitUrl||null,publishDirect:!!j.publishDirect,publicationError:j.publicationError||null};}
 function pushLog(j,text){j.log=(j.log+String(text)).slice(-18000);j.updated=Date.now();}
 function state(){return {world,jobs:[...jobs.values()].reverse().slice(0,40).map(publicJob),providers:PROVIDERS,connections:{github:github.hasGithubAuth(),manus:!!process.env.MANUS_API_KEY,ollama:ollamaAvailable,localCli:detectedCli},online:'servidor local'};}
 let ollamaAvailable=false;let detectedCli=[];
@@ -71,7 +71,7 @@ function commandFor(j){
   return ['gemini',['-p',instruction,'--approval-mode','auto_edit']];
 }
 async function runCLI(j,p){
-  const repo=validateGithubProject(p);j.phase='baixando repositório do GitHub';pushLog(j,'Clonando '+repo.name+' em workspace temporário isolado.\n');const work=github.cloneForJob(repo,j.id);j.workDir=work.dir;j.workspace=work.workspace;const dir=work.dir;const [cmd,args]=commandFor(j);j.phase='programando';
+  const repo=validateGithubProject(p);j.phase='baixando repositório do GitHub';pushLog(j,'Clonando '+repo.name+' em workspace temporário isolado.\n');const work=github.cloneForJob(repo,j.id);j.workDir=work.dir;j.workspace=work.workspace;j.publishRepo={...repo};j.baseCommit=github.invoke('git',['rev-parse','HEAD'],{cwd:work.dir});const dir=work.dir;const [cmd,args]=commandFor(j);j.phase='programando';
   await new Promise((resolve,reject)=>{
     let done=false;const finish=(error)=>{if(done)return;done=true;clearTimeout(timer);j.child=null;error?reject(error):resolve();};
     try{
@@ -83,7 +83,7 @@ async function runCLI(j,p){
     }catch(e){finish(e);}
     var timer=setTimeout(()=>{abortJob(j);finish(Error('Tempo limite de 30 minutos'));},30*60*1000);
   });
-  j.changed=github.hasChanges(dir);j.changeSummary=j.changed?github.diffSummary(dir):'';if(j.changed){pushLog(j,'\nAlterações detectadas no checkout temporário. Nenhum push foi feito.\n'+j.changeSummary+'\nUse PUBLICAR PR para criar um Pull Request de revisão.\n');}else pushLog(j,'\nNenhuma alteração no repositório.\n');
+  j.changed=github.hasChanges(dir);j.changeSummary=j.changed?github.diffSummary(dir):'';if(j.changed){pushLog(j,'\nAlterações detectadas no checkout temporário. Nenhum push foi feito.\n'+j.changeSummary+'\nUse PUBLICAR COMMIT para enviar diretamente ou PUBLICAR PR para revisão.\n');}else pushLog(j,'\nNenhuma alteração no repositório.\n');
 }
 async function runOllama(j){
   j.phase='pensando';const base=process.env.OLLAMA_URL||'http://127.0.0.1:11434';
@@ -135,13 +135,20 @@ async function runManus(j){
   throw Error('Tempo limite para acompanhamento do Manus. Abra a tarefa no Manus para conferir.');
 }
 async function runDemo(j){j.phase='simulação — sem IA';for(const event of ['Abrindo missão demonstrativa','Personagem chegando à mesa','Executando animação de trabalho','Missão demonstrativa concluída']){if(j.cancelled)return;pushLog(j,event+'\n');await new Promise(r=>setTimeout(r,1350));}}
+function publishDirect(j){
+  if(j.commitUrl||j.prUrl)fail(409,'Esta missão já foi publicada');
+  if(j.publishing)fail(409,'Publicação em andamento');
+  j.publishing=true;
+  try{const result=github.publishCommit(j,j.publishRepo);j.commitUrl=result.url;j.publicationError=null;pushLog(j,'\nCommit publicado no GitHub: '+result.url+'\n');}
+  finally{j.publishing=false;}
+}
 async function runJob(j){
   try{
     if(j.provider==='ollama')await runOllama(j);
     else if(j.provider==='manus')await runManus(j);
     else if(j.provider==='demo')await runDemo(j);
     else await runCLI(j,project(j.projectId));
-    if(!j.cancelled && j.status!=='waiting'){j.status='completed';j.phase='concluído';}
+    if(!j.cancelled && j.status!=='waiting'){j.status='completed';j.phase='concluído';if(j.publishDirect&&j.changed){try{publishDirect(j);}catch(e){j.publicationError=e.message;pushLog(j,'\nPublicação direta não concluída: '+e.message+'\n');}}}
   }catch(e){if(!j.cancelled){j.status='failed';j.phase='erro';pushLog(j,'\nERRO: '+e.message+'\n');}}
   finally{
     if(j.cancelled){j.status='cancelled';j.phase='cancelado';}
@@ -221,11 +228,16 @@ function createApp(){return http.createServer(async(req,res)=>{
         if(typeof b.name==='string'&&b.name.trim())p.name=b.name.trim().slice(0,45);
         p.github=repo;world.revision++;persist();if(civic.getSettings().policeEnabled&&!tasks.police.busy){tasks.police.last=0;void runDepartment('police',()=>academy.policePatrol(projectList())).catch(e=>console.warn('[Delegacia]',e.message));}return send(res,200,{ok:true,project:p});
       }
+      if(url.pathname==='/api/job/commit'){
+        const j=job(b.id);
+        if(!['codex','claude','gemini'].includes(j.provider)||j.status!=='completed'||!j.changed||!j.connected)fail(409,'Só uma missão concluída com alterações pode publicar commit');
+        publishDirect(j);return send(res,200,{job:publicJob(j)});
+      }
       if(url.pathname==='/api/job/publish'){
         const j=job(b.id);
         if(!['codex','claude','gemini'].includes(j.provider)||j.status!=='completed'||!j.changed||!j.connected)fail(409,'Só uma missão concluída com alterações pode publicar PR');
-        if(j.prUrl)fail(409,'PR já criado');
-        const p=project(j.projectId);if(!p.github?.name)fail(422,'Projeto GitHub não vinculado');
+        if(j.prUrl||j.commitUrl)fail(409,'Missão já publicada');
+        const p={github:j.publishRepo||project(j.projectId).github};if(!p.github?.name)fail(422,'Projeto GitHub não vinculado');
         if(j.publishing)fail(409,'Publicação em andamento');j.publishing=true;
         try{j.prUrl=github.publishPR(j,p.github);pushLog(j,'\nPR em rascunho criado: '+j.prUrl+'\n');if(j.workspace){try{fs.rmSync(j.workspace,{recursive:true,force:true})}catch{}}j.workDir=null;return send(res,200,{job:publicJob(j)});}finally{j.publishing=false;}
       }
@@ -239,8 +251,9 @@ function createApp(){return http.createServer(async(req,res)=>{
         if(!PROVIDERS.includes(provider)||provider==='demo')fail(400,'Selecione um agente de IA real (modo demonstração desativado)');
         if(!p.github?.name)fail(422,'Vincule primeiro um repositório do GitHub a este projeto.');
         if(p.projectId!=='city-works'&&(!agent||agent.projectId!==p.projectId||!['code','tester'].includes(agent.projectRole)))fail(422,'Escolha o Coder ou Tester deste projeto');
+        if(b.publishDirect===true&&!['codex','claude','gemini'].includes(provider))fail(422,'Publicação direta exige Codex, Claude ou Gemini CLI; Ollama e Manus não alteram este checkout local.');
         if(prompt.length<4||prompt.length>5500)fail(400,'Missão deve ter entre 4 e 5500 caracteres');
-        const j={role:agent?.projectRole||agent?.role||null,managerId:agent?.managerId||null,id:randomUUID(),projectId:p.projectId,provider,agentId:agent?.id||null,model:String(b.model||'').slice(0,80),prompt,status:'pending',phase:'aguardando aprovação',log:'',created:Date.now(),updated:Date.now(),cancelled:false};
+        const j={role:agent?.projectRole||agent?.role||null,managerId:agent?.managerId||null,id:randomUUID(),projectId:p.projectId,provider,agentId:agent?.id||null,model:String(b.model||'').slice(0,80),prompt,publishDirect:b.publishDirect===true,status:'pending',phase:'aguardando aprovação',log:'',created:Date.now(),updated:Date.now(),cancelled:false};
         jobs.set(j.id,j);if(jobs.size>100){const old=[...jobs.values()].find(x=>!['running','pending'].includes(x.status));if(old)jobs.delete(old.id);}
         return send(res,201,{job:publicJob(j)});
       }
