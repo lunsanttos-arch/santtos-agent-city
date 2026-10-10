@@ -204,14 +204,19 @@ function createApp(){return http.createServer(async(req,res)=>{
       if(url.pathname==='/api/building/name'){const o=world.objects.find(o=>o.id===b.id&&['office','house','service'].includes(o.kind));if(!o)fail(404,'Edifício não encontrado');try{o.name=civic.checkedName(b.name);}catch(e){fail(400,e.message)}world.revision++;persist();return send(res,200,{world});}
       if(url.pathname==='/api/civic/agent/assign'){try{return send(res,200,{agent:civic.assignAgent(b,projectList().map(p=>p.projectId))});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/automation'){try{return send(res,200,{settings:civic.setAutomation(b.name,b.enabled)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/library/review'){
+        const repo=String(b.repo||'').trim(),db=civic.all();
+        if(!db.collections.some(c=>c.repos.includes(repo))&&!db.discoveries.some(d=>d.repo===repo))fail(404,'Repositório não está na Biblioteca');
+        return send(res,200,{review:await academy.reviewLibraryRepo(repo)});
+      }
       if(url.pathname==='/api/civic/research/run')return send(res,200,await runDepartment('research',()=>academy.discover()));
       if(url.pathname==='/api/civic/engineer/run')return send(res,200,await runDepartment('engineer',()=>academy.engineer(projectList())));
       if(url.pathname==='/api/civic/police/run')return send(res,200,await runDepartment('police',()=>academy.policePatrol(projectList())));
-      if(url.pathname==='/api/civic/discovery/curate'){try{return send(res,200,{discovery:civic.curateDiscovery(b.id,b.collectionId)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/discovery/curate'){try{return send(res,200,{discovery:await (async()=>{const d=civic.curateDiscovery(b.id,b.collectionId);await academy.reviewLibraryRepo(d.repo);return d;})()});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/suggestion/status'){try{return send(res,200,{suggestion:civic.updateSuggestion(b.id,b.status)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/collection'){try{return send(res,201,{collection:civic.addCollection(b)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/profile'){try{return send(res,201,{profile:civic.addProfile(b)});}catch(e){fail(400,e.message)}}
-      if(url.pathname==='/api/civic/collection/repo'){try{return send(res,200,{collection:civic.addRepoToCollection(b)});}catch(e){fail(400,e.message)}}
+      if(url.pathname==='/api/civic/collection/repo'){try{return send(res,200,{collection:await (async()=>{const c=civic.addRepoToCollection(b);await academy.reviewLibraryRepo(String(b.repo).trim());return c;})()});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/reminder'){try{return send(res,201,{reminder:civic.addReminder(b)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/reminder/done'){try{return send(res,200,{reminder:civic.finishReminder(b.id)});}catch(e){fail(400,e.message)}}
       if(url.pathname==='/api/civic/lesson'){try{return send(res,201,{lesson:civic.addLesson(b)});}catch(e){fail(400,e.message)}}
