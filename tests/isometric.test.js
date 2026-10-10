@@ -17,3 +17,10 @@ test('altura do sprite permanece estável após alinhamento fracionário',async(
  const src=fs.readFileSync(path.join(__dirname,'..','public','atlas.js'),'utf8'),atlas=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
  for(const kind of ['house','office']){const object={id:'stable-id',kind,x:4,y:37};const height=atlas.atlasBuildingHeight(object,100);assert(Number.isFinite(height));assert.equal(atlas.atlasBuildingHeight({...object,x:4.25,y:37.75},100),height);}
 });
+
+test('pessoas nas fachadas sul e leste são desenhadas depois do prédio; atrás, antes',async()=>{
+ const {sceneDrawOrder}=await iso,building={id:'b',x:10,y:10,w:6,h:5};
+ for(const point of [{x:11,y:15.5},{x:16.5,y:11},{x:17,y:16}]){const order=sceneDrawOrder([building],[{kind:'mayor',a:point}]);assert.equal(order[0].kind,'obj');assert.equal(order[1].kind,'mayor');}
+ for(const point of [{x:11,y:9.5},{x:9.5,y:11}]){const order=sceneDrawOrder([building],[{kind:'mayor',a:point}]);assert.equal(order[0].kind,'mayor');}
+ const moved={...building,x:10.25,y:10.5};assert.equal(sceneDrawOrder([moved],[{kind:'mayor',a:{x:10.5,y:15.6}}])[1].kind,'mayor');
+});

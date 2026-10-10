@@ -2,7 +2,7 @@ import {PROJECT_ROLES,roleOf,roleTitle,isWorking} from './city-behavior.js';
 // Edifícios públicos: controles de instituições. Nenhum avatar é criado aqui.
 const $=id=>document.getElementById(id);
 const SERVICES={cityhall:['🏛','PREFEITURA','Coordenação de missões e prioridades'],library:['📚','BIBLIOTECA','Pesquisa pública de repositórios GitHub'],university:['🎓','UNIVERSIDADE','Habilidades por documentação e instruções'],police:['🛡','DELEGACIA DIGITAL','Triagem técnica e registros de segurança'],talents:['✦','AGÊNCIA DE TALENTOS','Cadastre e configure seus agentes de IA']};
-const SKINS=[[1,'Secretária'],[2,'Bibliotecária'],[3,'Pesquisador'],[4,'Engenheiro'],[5,'Recepcionista'],[6,'Delegado'],[7,'Policial de Código'],[8,'Policial de Credenciais'],[9,'Gerente'],[10,'Código'],[11,'QA'],[12,'Tester'],[13,'UX'],[14,'Auxiliar'],[15,'Cidadão']].map(([id,name])=>[String(id),name]);
+const SKINS=[[1,'Secretária'],[2,'Bibliotecária'],[3,'Pesquisador'],[4,'Engenheiro'],[5,'Recepcionista'],[6,'Delegado'],[7,'Policial de Código'],[8,'Policial de Credenciais'],[9,'Secretário de Obras'],[10,'Coder'],[11,'QA'],[12,'Tester'],[13,'UX'],[14,'Auxiliar'],[15,'Cidadão']].map(([id,name])=>[String(id),name]);
 const ROLES=[['desenvolvimento','Programação'],['arquitetura','Arquitetura'],['pesquisa','Pesquisador'],['engenharia','Engenheiro'],['qa','QA'],['seguranca','Segurança'],['redacao','Redação'],['gestao','Gestão'],['secretaria','Secretária'],['bibliotecaria','Bibliotecária'],['tester','Tester'],['ux','UX'],['auxiliar','Auxiliar'],['recepcionista','Recepcionista']];
 function element(tag,text,cls){const e=document.createElement(tag);if(text!=null)e.textContent=String(text);if(cls)e.className=cls;return e;}
 function action(text,fn,cls=''){const b=element('button',text,'civic-btn '+cls);b.type='button';b.onclick=fn;return b;}
@@ -14,7 +14,7 @@ const getActive=j=>j.connected&&['running','waiting'].includes(j.status);
 const DEPARTMENTS=[['cityhall','Prefeitura'],['police','Delegacia'],['library','Biblioteca'],['university','Universidade'],['talents','Central de Talentos'],['office','Escritórios de projetos']];
 function container(service,context){
  const [emoji,title,subtitle]=SERVICES[service]||['⌂','SAN TTOS','Cidade dos agentes'];
- const root=$('serviceContent');clear(root);root.append(element('span','AGENT CITY · V0.7.1','civic-eyebrow'));
+ const root=$('serviceContent');clear(root);root.append(element('span','AGENT CITY · V0.9.0','civic-eyebrow'));
  const h=element('h2',emoji+'  '+title);root.append(h,element('p',subtitle,'civic-subtitle'));
  const inner=element('div',null,'civic-body');root.append(inner);$('serviceModal').classList.remove('hidden');return inner;
 }
@@ -118,11 +118,12 @@ export async function openOfficeTeam(project,context){
  const title=body.parentElement?.querySelector('h2');if(title)title.textContent='🏢  EQUIPE · '+project.name.toUpperCase();
  body.append(element('p','Escolhe um agente já criado na Central de Talentos e atribui uma função ao escritório. O personagem aparece na cidade mesmo enquanto sua IA estiver offline.'));
  const a=await api('civic');const optionsAgent=a.agents.map(agent=>[agent.id,agent.name+' · '+agent.role+(agent.projectId?' ('+agent.projectId+')':'')]);
- body.append(element('p','O Gerente é o agente principal. Código, QA, Tester, UX e Auxiliar são subagentes vinculados ao Gerente. Os perfis são cadastrados automaticamente; cada IA precisa de um provedor conectado e de aprovação para executar missões.'));
+ body.append(element('p','Cada projeto tem somente Coder e Tester: dois agentes independentes, com nomes e provedores configuráveis. Cada um pode ter uma missão no mesmo projeto.'));
  for(const slot of PROJECT_ROLES){
   const agent=a.agents.find(x=>x.projectId===project.projectId&&roleOf(x)?.key===slot.key);
-  const card=nodeCard(body,slot.label+(slot.key==='manager'?' · AGENTE':' · SUBAGENTE'),agent?agent.name+' · '+(isWorking(agent.id,store.jobs)?'TRABALHANDO NO PRÉDIO':'DISPONÍVEL'):'Função sem perfil.');
+  const card=nodeCard(body,slot.label+' · AGENTE',agent?agent.name+' · '+(isWorking(agent.id,store.jobs)?'TRABALHANDO NO PRÉDIO':'DISPONÍVEL'):'Função sem perfil.');
   if(!agent)continue;
+  editableName(card,agent,context);
   const provider=options(card,'PROVEDOR DESTA FUNÇÃO',[['codex','Codex CLI'],['claude','Claude Code'],['gemini','Gemini CLI'],['ollama','Ollama local'],['manus','Manus API']]);provider.value=agent.provider;
   card.append(action('SALVAR PROVEDOR',async()=>{try{await api('civic/project-agent',{agentId:agent.id,provider:provider.value});toast('Provedor salvo para '+slot.label);await openOfficeTeam(project,context)}catch(e){toast(e.message)}}));
   if(context.selectAgent)card.append(action('PREPARAR MISSÃO PARA '+slot.label.toUpperCase(),()=>{$('serviceModal').classList.add('hidden');context.selectAgent(agent)},'primary'));
@@ -138,9 +139,11 @@ export async function openOfficeTeam(project,context){
  for(const report of a.policeReports.filter(r=>r.projectId===project.projectId).slice(-6).reverse())nodeCard(body,report.repo,report.summary);
 }
 
+function editableName(body,agent,context){const name=labelled(body,'NOME DO AGENTE');name.maxLength=40;name.value=agent.name;body.append(action('SALVAR NOME',async()=>{try{await context.api('civic/agent/name',{agentId:agent.id,name:name.value});agent.name=name.value.trim();body.parentElement.querySelector('h2')&&(body.parentElement.querySelector('h2').textContent=agent.name);context.toast('Nome salvo');}catch(e){context.toast(e.message)}}));}
 export function openAgentInfo(agent,context){
  const body=container('talents',context);body.parentElement.querySelector('h2').textContent=agent.name;
  body.parentElement.querySelector('.civic-subtitle').textContent=roleTitle(agent);
+ editableName(body,agent,context);
  const manager=context.store&&agent.managerId;
  nodeCard(body,agent.agentType==='subagent'?'SUBAGENTE':'AGENTE',manager?'Vinculado ao Gerente do projeto.':'Responsável pela sua função.');
  nodeCard(body,'ATIVIDADE',isWorking(agent.id,context.store.jobs)?'Trabalhando dentro do prédio.':'Disponível.');
@@ -150,9 +153,15 @@ export async function openStaff(staff,context){
  const {api,toast,projects}=context,body=container(staff.service,context);
  body.parentElement.querySelector('h2').textContent=staff.name;
  body.parentElement.querySelector('.civic-subtitle').textContent=staff.role;
- nodeCard(body,'FUNÇÃO',staff.task);
+ nodeCard(body,'FUNÇÃO',staff.task);editableName(body,staff,context);
  const run=async(endpoint)=>{try{toast(staff.name+' trabalhando...');const result=await api(endpoint,{});toast(result.result?.note||'Rotina concluída.')}catch(e){toast(e.message)}};
- if(staff.id==='researcher')body.append(action('BUSCAR NOVIDADES NO GITHUB',()=>run('civic/research/run'),'primary'));
+ if(staff.id==='works-secretary'){
+  const data=await api('civic'),agent=data.agents.find(a=>a.id===staff.id);
+  body.append(element('p','Peça uma funcionalidade, correção ou melhoria da própria SanTTos City. A IA trabalha em um clone do repositório; depois você revisa e publica um PR pelo painel MISSÕES.'));
+  const provider=options(body,'PROVEDOR DE IA',[['codex','Codex CLI'],['claude','Claude Code'],['gemini','Gemini CLI'],['ollama','Ollama (planejamento)'],['manus','Manus API']]);provider.value=agent?.provider||'codex';
+  const prompt=labelled(body,'PEDIDO DE OBRA','textarea','Descreva o que quer criar ou melhorar na cidade');
+  body.append(action('CRIAR MISSÃO DE MELHORIA',async()=>{try{await api('civic/project-agent',{agentId:staff.id,provider:provider.value});await api('job',{projectId:'city-works',agentId:staff.id,provider:provider.value,prompt:prompt.value});toast('Missão do Secretário criada. Abra MISSÕES para aprovar.');$('serviceModal').classList.add('hidden');context.showMissions?.();}catch(e){toast(e.message)}},'primary'));
+ }else if(staff.id==='researcher')body.append(action('BUSCAR NOVIDADES NO GITHUB',()=>run('civic/research/run'),'primary'));
  else if(staff.id==='engineer')body.append(action('ANALISAR READMES DA BIBLIOTECA',()=>run('civic/engineer/run'),'primary'));
  else if(staff.id==='librarian'){
   const q=labelled(body,'BUSCAR REPOSITÓRIOS','text','Nome ou tema');const results=element('div',null,'civic-results');

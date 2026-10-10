@@ -1,4 +1,4 @@
-# SanTTos Agent City v0.8.0 — Equipes de projeto e personagens da cidade
+# SanTTos Agent City v0.9.0 — Equipes de projeto e personagens da cidade
 
 Aplicação **local** em Node.js 20+, interface em português. Casas, cidade isométrica e interiores visitáveis. Código publicado para desenvolvimento colaborativo; não usa artes oficiais de Pokémon.
 
@@ -7,6 +7,14 @@ Aplicação **local** em Node.js 20+, interface em português. Casas, cidade iso
 Baixe o ZIP do repositório, extraia em uma pasta NOVA e execute **`INICIAR-SANTTOS-CITY.bat`**. Com Node.js instalado, o navegador abre `http://127.0.0.1:4317`. Feche qualquer servidor de uma versão anterior que ocupe a porta 4317. Pelo terminal: `npm test` e `npm start`. Não é necessário `npm install`.
 
 Os testes opcionais de interface são `node scripts/browser-smoke.cjs`, `node scripts/city-behavior-smoke.cjs`, `node scripts/city-controls-smoke.cjs` e `node scripts/city-visual-smoke.cjs`, com Playwright e Chromium disponíveis. Os dois últimos aceitam `SANTTOS_TEST_URL` para apontar para outra porta local e usam fixtures sem executar missões ou autorizar contas reais.
+
+## Novidades v0.9
+
+- Cada projeto tem exatamente **Coder e Tester**, dois agentes independentes com skins diferentes. Cada um aceita sua própria missão no mesmo repositório. Os quatro papéis antigos são arquivados no `data/civic.json`; Coder/Tester conservam IDs, nomes e provedores. A migração roda ao iniciar e não apaga os perfis antigos.
+- Na **Prefeitura**, clique no **Secretário de Obras**. Configure o provedor, escreva o pedido e clique **CRIAR MISSÃO DE MELHORIA**. Ele trabalha no repositório da própria SanTTos City. Abra **MISSÕES** para aprovar a execução; ao terminar uma missão CLI com alterações, revise e publique o PR. Provedor local instalado/autenticado e acesso ao GitHub continuam necessários para executar código. Ollama serve para planejamento.
+- Clique em qualquer personagem para **SALVAR NOME**. Na equipe do escritório também pode editar os nomes. Para renomear um prédio/casa, use **CONSTRUIR → Selecionar** e o campo **NOME DO EDIFÍCIO**.
+- Os prédios agora são desenhados pela mesma projeção 2:1 das ruas, incluindo fachadas, janelas e portas. As posições existentes e o ajuste fino são preservados.
+- A ordem de desenho usa a posição relativa às fachadas; quem anda na frente/lateral deixa de desaparecer por baixo do prédio. A colisão usa coordenadas contínuas com margem para os pés, inclusive em prédios movidos em ¼ de tile.
 
 ## Novidades v0.8
 
@@ -18,7 +26,7 @@ Os testes opcionais de interface são `node scripts/browser-smoke.cjs`, `node sc
 
 ## Novidades v0.7
 
-- Cada escritório recebe Gerente (agente principal), Código, QA, Tester, UX e Auxiliar (subagentes vinculados ao Gerente). Configure o provedor de cada função em **EQUIPE DO ESCRITÓRIO**. Os perfis persistem; uma IA só executa depois de conexão e aprovação de uma missão. O vínculo de subagente não inicia outras missões automaticamente.
+- Na versão 0.7, cada escritório recebia seis funções; a versão 0.9 reduz a equipe a Coder e Tester. Configure o provedor de cada função em **EQUIPE DO ESCRITÓRIO**. Os perfis persistem; uma IA só executa depois de conexão e aprovação de uma missão. O vínculo de subagente não inicia outras missões automaticamente.
 - As salas selecionam funções, sem trocar para Claude por posição do clique. Clique no personagem para ver apenas a sua função.
 - O personagem precisa estar perto do prédio para entrar. Clicar longe leva até a entrada; clique novamente quando chegar. Um clique no chão também permite caminhar. WASD interrompe o trajeto.
 - Equipes dos projetos trabalham no interior dos escritórios e passeiam durante a ociosidade. O jogador tem skin exclusiva, não disponível no cadastro de agentes. Há 15 outras skins selecionáveis, incluindo funcionários e policiais com identidade própria.
@@ -63,6 +71,6 @@ Os testes executam sequencialmente porque compartilham `data/civic.json`. Para a
 
 Com Playwright e Chromium disponíveis, `node scripts/city-behavior-smoke.cjs` verifica entrada por proximidade, agentes em missão no interior, salas por função e interações individuais dos funcionários. Usa respostas simuladas de API e não executa missões de IA.
 
-## Revisão visual v0.8.0
+## Revisão visual v0.9.0
 
 Direção de arte inspirada nos sprites de mapa dos RPGs portáteis de 16 bits: personagens compactos com olhos simples, fachadas limpas, telhados com poucas cores, grama sem ruído e uma fonte menor. A cidade continua isométrica e as identidades e funções foram preservadas. Toda a arte é original; não contém personagens, logotipos ou sprites oficiais de Pokémon.

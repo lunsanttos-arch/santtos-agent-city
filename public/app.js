@@ -2,7 +2,7 @@ import {drawPixelAgent} from './sprites.js';
 import {renderInterior,renderSpeechBubble} from './interior-world.js';
 import {projectIso,unprojectIso,hitIsoObject,renderIsometric,drawActivity} from './isometric.js';
 import {openService,showServiceDirectory,openOfficeTeam,openAgentInfo,openStaff} from './institutions.js';
-import {PROJECT_ROLES,PLAYER_SKIN,STAFF,roleOf,isWorking,canEnter,hitPerson} from './city-behavior.js';
+import {PROJECT_ROLES,PLAYER_SKIN,STAFF,roleOf,isWorking,canEnter,hitPerson,canWalkCity} from './city-behavior.js';
 const $=id=>document.getElementById(id);
 const canvas=$('world'),ctx=canvas.getContext('2d',{alpha:false});ctx.imageSmoothingEnabled=false;
 const TILE=24,W=68,H=52;
@@ -50,7 +50,7 @@ function approachBuilding(o){
  toast(playerPath.length?'Caminhando até a entrada. Clique no prédio novamente quando estiver perto.':'Aproxime-se do prédio com WASD para entrar.');
 }
 function onWorldClick(x,y,e){
- if(e){const point=toIsoScreen(e),person=hitPerson(scenePeople,point.x,point.y);if(person){if(person.staff)openStaff(person.staff,{api,store,toast,projects,chooseProject});else openAgentInfo(person.agent,{api,store,toast,projects,chooseProject,selectAgent});return;}}
+ if(e){const point=toIsoScreen(e),person=hitPerson(scenePeople,point.x,point.y);if(person){if(person.staff)openStaff(person.staff,{api,store,toast,projects,chooseProject,showMissions});else openAgentInfo(person.agent,{api,store,toast,projects,chooseProject,selectAgent});return;}}
  const obj=(e?isometricHit(e):null)||objectAt(x,y);
  if(['service','office','house'].includes(obj?.kind)&&!canEnter(player,obj)){approachBuilding(obj);return;}
  if(obj?.kind==='service'){serviceObj=obj;cityPlayer={x:player.x,y:player.y};playerPath=[];player.x=19.5;player.y=12.5;scene='service';editing=false;updateSceneLabels();toast('Entrou em '+obj.name+'. Clique em um funcionário para ver sua função.');}
@@ -64,7 +64,7 @@ function selectAgent(agent){
 }
 
 async function editAt(x,y){if(busy||!editing||x<0||y<0||x>=W||y>=H)return;const obj=objectAt(x,y);
- if(tool==='select'){selectedObj=obj?.id||null;toast(obj?`${obj.name||obj.kind} selecionado`:'Nenhum objeto nesta posição');return;}
+ if(tool==='select'){selectedObj=obj?.id||null;if(obj&&['office','house','service'].includes(obj.kind)){ $('buildingName').value=obj.name||'';$('buildingNameControls').classList.remove('hidden');}else $('buildingNameControls').classList.add('hidden');toast(obj?`${obj.name||obj.kind} selecionado`:'Nenhum objeto nesta posição');return;}
  if(tool==='move'){if(!moveId){if(!obj)return toast('Clique numa construção primeiro');moveId=obj.id;updateMoveControls();toast('Clique no destino ou use X/Y para ajuste fino');return;}try{busy=true;const v=await api('map/edit',{tool:'move',x,y,id:moveId,revision:store.world.revision});store.world=v.world;listProjects();updateMoveControls();toast('Construção movida — ajuste fino disponível');}catch(e){toast(e.message)}finally{busy=false}return;}
  if(['office','house'].includes(tool)){pendingTile={tool,x,y};$('newObjectName').value=tool==='office'?'Novo projeto SanTTos':'Nova casa';$('confirmModal').classList.remove('hidden');$('newObjectName').focus();return;}
  try{busy=true;const v=await api('map/edit',{tool,x,y,revision:store.world.revision});store.world=v.world;listProjects();if(obj?.projectId===selectedProject&&tool==='erase'){selectedProject=null;drawInspector();} }catch(e){if(!painting)toast(e.message)}finally{busy=false;}}
@@ -75,7 +75,7 @@ function onCanvasClick(e){
  if(scene==='city'){if(editing)return;const pt=tileFromEvent(e);onWorldClick(pt.x,pt.y,e);return;}
  const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)*960/r.width,y=(e.clientY-r.top)*648/r.height;
  const person=hitPerson(scenePeople,x,y);
- if(person){if(person.staff)openStaff(person.staff,{api,store,toast,projects,chooseProject});else openAgentInfo(person.agent,{api,store,toast,projects,chooseProject,selectAgent});return;}
+ if(person){if(person.staff)openStaff(person.staff,{api,store,toast,projects,chooseProject,showMissions});else openAgentInfo(person.agent,{api,store,toast,projects,chooseProject,selectAgent});return;}
  if(scene==='office'){
   const room=PROJECT_ROLES.find(r=>x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h);
   if(room){const agent=civicState.agents.find(a=>a.projectId===selectedProject&&roleOf(a)?.key===room.key);if(agent)selectAgent(agent);else toast(room.label+' — função sem agente designado.');}
@@ -86,11 +86,12 @@ const keys=new Set();let worldBusyKey=0;
 function handleKeyboard(dt){if(!$('serviceModal').classList.contains('hidden'))return;if(editing||document.activeElement&&['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;let dx=0,dy=0;if(keys.has('ArrowUp')||keys.has('w'))dy=-1;if(keys.has('ArrowDown')||keys.has('s'))dy=1;if(keys.has('ArrowLeft')||keys.has('a'))dx=-1;if(keys.has('ArrowRight')||keys.has('d'))dx=1;player.walking=!!(dx||dy);
  if(player.walking)playerPath=[];
  if(!player.walking){
-  if(scene==='city'&&playerPath.length){const target=playerPath[0];if(!walkable(Math.floor(target.x),Math.floor(target.y))){playerPath=[];return;}const dist=Math.hypot(target.x-player.x,target.y-player.y),step=Math.min(dist,dt*3.2);player.facing=Math.abs(target.x-player.x)>Math.abs(target.y-player.y)?target.x>player.x?'right':'left':target.y>player.y?'down':'up';if(dist>.01){player.x+=(target.x-player.x)/dist*step;player.y+=(target.y-player.y)/dist*step;}player.frame+=dt*8;player.walking=true;if(dist<.12)playerPath.shift();}
+  if(scene==='city'&&playerPath.length){const target=playerPath[0];if(!walkable(Math.floor(target.x),Math.floor(target.y))){playerPath=[];return;}const dist=Math.hypot(target.x-player.x,target.y-player.y),step=Math.min(dist,dt*3.2);player.facing=Math.abs(target.x-player.x)>Math.abs(target.y-player.y)?target.x>player.x?'right':'left':target.y>player.y?'down':'up';if(dist>.01){const nx=player.x+(target.x-player.x)/dist*step,ny=player.y+(target.y-player.y)/dist*step;if(!canWalkAt(nx,ny)){playerPath=[];return;}player.x=nx;player.y=ny;}player.frame+=dt*8;player.walking=true;if(dist<.12)playerPath.shift();}
   return;
- }const len=Math.hypot(dx,dy)||1;dx/=len;dy/=len;player.facing=dy<0?'up':dy>0?'down':dx<0?'left':'right';const speed=3.2*dt;if(scene==='city'){const nextX=Math.min(W-.4,Math.max(.4,player.x+dx*speed)),nextY=Math.min(H-.4,Math.max(.4,player.y+dy*speed));const blocked=objectAt(Math.floor(nextX),Math.floor(nextY));if(!blocked&&store.world.terrain?.[Math.floor(nextY)]?.[Math.floor(nextX)]!=='water'){player.x=nextX;player.y=nextY;}else if(blocked&&blocked.kind==='office'&&Date.now()-worldBusyKey>1200){worldBusyKey=Date.now();} }else{player.x=Math.max(2,Math.min(38,player.x+dx*speed));player.y=Math.max(2,Math.min(24,player.y+dy*speed));}player.frame+=dt*8;}
+ }const len=Math.hypot(dx,dy)||1;dx/=len;dy/=len;player.facing=dy<0?'up':dy>0?'down':dx<0?'left':'right';const speed=3.2*dt;if(scene==='city'){const nextX=Math.min(W-.4,Math.max(.4,player.x+dx*speed)),nextY=Math.min(H-.4,Math.max(.4,player.y+dy*speed));const blocked=objectAt(nextX,nextY);if(canWalkAt(nextX,nextY)){player.x=nextX;player.y=nextY;}else if(blocked&&blocked.kind==='office'&&Date.now()-worldBusyKey>1200){worldBusyKey=Date.now();} }else{player.x=Math.max(2,Math.min(38,player.x+dx*speed));player.y=Math.max(2,Math.min(24,player.y+dy*speed));}player.frame+=dt*8;}
 function walkProvider(a,target,dt){const delta=Math.hypot(target.x-a.x,target.y-a.y);if(delta<.06)return;const step=Math.min(delta,dt*1.1);const dx=(target.x-a.x)/delta,dy=(target.y-a.y)/delta;a.x+=dx*step;a.y+=dy*step;a.dir=Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up';a.last+=dt*7;}
-function walkable(x,y){return x>=0&&y>=0&&x<W&&y<H&&tq(x,y)!=='water'&&!objectAt(x,y)}
+function canWalkAt(x,y){return canWalkCity(store.world,x,y);}
+function walkable(x,y){return canWalkAt(Math.floor(x)+.5,Math.floor(y)+.5)}
 function pathTo(sx,sy,tx,ty){
   const start=[Math.floor(sx),Math.floor(sy)],end=[Math.floor(tx),Math.floor(ty)],queue=[start],visited=new Set([start.join(',')]),prev=new Map();
   if(!walkable(...end))return [];
@@ -124,7 +125,7 @@ function updateProviders(dt,time){
    if(a.path.length){const next=a.path[0];walkProvider(a,next,dt);if(Math.hypot(next.x-a.x,next.y-a.y)<.11)a.path.shift();}
  }
  for(const key of jobAvatars.keys())if(!active.some(j=>j.id===key))jobAvatars.delete(key);
- const residents=(civicState.agents||[]).slice(0,70);
+ const residents=(civicState.agents||[]).filter(a=>!a.fixedStaff&&!a.archived).slice(0,70);
  for(const [idx,agent] of residents.entries()){
   if(!residentAvatars.has(agent.id))residentAvatars.set(agent.id,{x:33.5+(idx%5)*.45,y:28.5+Math.floor(idx/5)*.45,dir:'down',path:[],target:'',last:0});
   const avatar=residentAvatars.get(agent.id);
@@ -200,7 +201,7 @@ function drawWorld(time){
  try{renderIsometric(ctx,{terrain:store.world.terrain,objects:store.world.objects,jobs:store.jobs,avatars:[
   ...[...residentAvatars].filter(([id])=>residentAvatars.get(id)?.place==='outside'&&!isWorking(id,store.jobs)).map(([id,a])=>{const resident=civicState.agents?.find(v=>v.id===id);return {...a,agent:resident,resident:true,name:resident?.name||'Agente',color:resident?.skin||'#d5c2ff',frame:a.path.length?a.last:0,moving:!!a.path.length,working:store.jobs.some(j=>j.agentId===id&&j.connected&&['running','waiting'].includes(j.status))}}),
   ...[...jobAvatars].map(([id,a])=>({...a,job:store.jobs.find(j=>j.id===id),color:PROVIDER_INFO[a.id]?.color||'#d5c2ff',frame:a.last})).filter(a=>a.job&&!a.job.agentId&&!['running','waiting'].includes(a.job.status)),
- ...[...patrolAvatars].map(([id,a])=>{const staff=STAFF.find(s=>s.id===id);return {...a,resident:true,staff,name:staff.name,color:{spriteIndex:staff.sprite},frame:a.path.length?a.last:0,moving:!!a.path.length}})
+ ...[...patrolAvatars].map(([id,a])=>{const base=STAFF.find(s=>s.id===id),staff={...base,name:civicState.staffNames?.find(n=>n.id===id)?.name||base.name};return {...a,resident:true,staff,name:staff.name,color:{spriteIndex:staff.sprite},frame:a.path.length?a.last:0,moving:!!a.path.length}})
  ],player,hover,editing,tool,time,drawPerson,camera,playerSkin:PLAYER_SKIN,onPerson:p=>scenePeople.push(p)});}finally{ctx.restore();}
  ctx.fillStyle='#1c2c2bc9';ctx.fillRect(710,600,220,28);ctx.fillStyle='#fffbe6';ctx.font='bold 12px monospace';ctx.textAlign='center';
  ctx.fillText(store.jobs.filter(j=>j.connected&&['running','waiting'].includes(j.status)).length+' AGENTES ATIVOS',820,619);
@@ -214,12 +215,13 @@ function drawOffice(time){
  scenePeople=[];pixel(0,0,960,648,'#23364a');
  for(const r of PROJECT_ROLES){
   const colors={manager:['#ead8bd','#f3e7d3'],code:['#d2e2ee','#e5eef4'],qa:['#dfd6ee','#eee5f6'],tester:['#e6dbc2','#f5ecd4'],ux:['#ead5e0','#f9e9f0'],assistant:['#d3e3d9','#e6f3ec']};
-  room(r.x,r.y,r.w,r.h,r.label.toUpperCase()+(r.key==='manager'?' • AGENTE':' • SUBAGENTE'),...colors[r.key]);
+  room(r.x,r.y,r.w,r.h,r.label.toUpperCase()+' • AGENTE',...colors[r.key]);
   desk(r.x+r.w/2,r.y+115,['#e7bf72','#76bbdf','#b5a0df','#edbb77','#e8a5be','#7bbca8'][PROJECT_ROLES.indexOf(r)]);
-  const assigned=civicState.agents.filter(a=>(a.projectId===selectedProject||store.jobs.some(j=>j.agentId===a.id&&j.projectId===selectedProject&&['running','waiting'].includes(j.status)))&&(roleOf(a)?.key||'assistant')===r.key).slice(0,3);
+  const assigned=civicState.agents.filter(a=>(a.projectId===selectedProject||store.jobs.some(j=>j.agentId===a.id&&j.projectId===selectedProject&&['running','waiting'].includes(j.status)))&&(roleOf(a)?.key||'code')===r.key).slice(0,3);
   if(!assigned.length)label('SEM AGENTE DESIGNADO',r.x+r.w/2,r.y+175,'#eef','#546074','bold 9px monospace');
   assigned.filter(agent=>!residentAvatars.get(agent.id)||residentAvatars.get(agent.id).place==='office'||isWorking(agent.id,store.jobs)).forEach((agent,i)=>{const walking=residentAvatars.get(agent.id)?.phase===1&&!isWorking(agent.id,store.jobs);const x=r.x+r.w/2+(i-(assigned.length-1)/2)*60+(walking?Math.sin(time/2200)*55:0),y=r.y+163+(walking?Math.cos(time/2400)*23:0),working=isWorking(agent.id,store.jobs);drawPerson(x,y,agent.skin,'down',working||walking?time/700:0,1.25);scenePeople.push({x,y,agent});label(agent.name.toUpperCase(),x,y-36,'#fff7de','#4b6274','bold 8px monospace');drawActivity(ctx,x,y-59,working?'work':walking?'walk':'rest');});
  }
+ room(30,360,432,230,'DESCANSO','#d3e3d9','#e6f3ec');room(490,360,439,230,'BANCADA DE TESTES','#e6dbc2','#f5ecd4');bookshelf(73,406);pixel(140,455,220,48,'#78a39b');pixel(149,458,202,33,'#b8d7b8');desk(708,476,'#a1d0db');
  pixel(30,282,900,60,'#dacbb3');label('CLIQUE NO PERSONAGEM PARA VER SUA FUNÇÃO • ESC PARA SAIR',480,326,'#fff','#5b587c','bold 10px monospace');
  const p=projects().find(o=>o.projectId===selectedProject);label((p?.name||'ESCRITÓRIO').toUpperCase()+' • EQUIPE DO PROJETO',480,36,'#fff','#413354','bold 12px monospace');
  // Missions without a profile also remain inside, in the Código room.
@@ -259,19 +261,20 @@ function frame(time){
   if(lastRenderError!==e.message){toast('Falha ao desenhar a cidade: '+e.message+' — abra F12 para detalhes.');lastRenderError=e.message;}
  }finally{requestAnimationFrame(frame);}
 }
-function updateAgentPick(){const el=$('agentPick');if(!el)return;const value=el.value;el.replaceChildren(new Option('Agente do provedor (sem perfil)',''));(civicState.agents||[]).filter(a=>a.provider===$('provider').value&&(!a.projectId||a.projectId===selectedProject)).forEach(a=>el.add(new Option(a.name+' · '+(a.officeFunction||a.role),a.id)));if([...el.options].some(o=>o.value===value))el.value=value;}
+function updateAgentPick(){const el=$('agentPick');if(!el)return;const value=el.value;el.replaceChildren(new Option('Escolha Coder ou Tester',''));(civicState.agents||[]).filter(a=>!a.fixedStaff&&a.provider===$('provider').value&&a.projectId===selectedProject&&['code','tester'].includes(a.projectRole)).forEach(a=>el.add(new Option(a.name+' · '+(a.officeFunction||a.role),a.id)));el.value=value&&[...el.options].some(o=>o.value===value)?value:el.options[1]?.value||'';}
 function updateModel(){$('modelRow').classList.toggle('hidden',$('provider').value!=='ollama');updateAgentPick();}
 $('btnWorld').onclick=()=>{hidePanels();serviceObj=null;if(scene!=='city'){player.x=cityPlayer.x;player.y=cityPlayer.y;}scene='city';playerPath=[];editing=false;$('btnEditor').classList.remove('active');$('btnWorld').classList.add('active');$('editorPane').classList.add('hidden');$('inspectorPane').classList.remove('hidden');updateSceneLabels()};
 $('btnEditor').onclick=toggleEditor;
 $('btnProjects').onclick=()=>{hidePanels();document.querySelector('.left-panel').classList.add('open')};
 $('btnManagement').onclick=()=>{openInspector();drawInspector();renderJobs()};
-$('btnServices').onclick=()=>showServiceDirectory(store.world.objects,{api,store,toast,projects,chooseProject});
-$('serviceManage').onclick=()=>{if(serviceObj)openService(serviceObj,{api,store,toast,projects,chooseProject})};
+$('btnServices').onclick=()=>showServiceDirectory(store.world.objects,{api,store,toast,projects,chooseProject,showMissions});
+$('serviceManage').onclick=()=>{if(serviceObj)openService(serviceObj,{api,store,toast,projects,chooseProject,showMissions})};
 const teamButton=button('♙ EQUIPE DO ESCRITÓRIO',()=>{const project=projects().find(p=>p.projectId===selectedProject);if(project)openOfficeTeam(project,{api,store,toast,projects,chooseProject,selectAgent})});teamButton.classList.add('primary','full');$('projectControls').append(teamButton);
 $('closeService').onclick=()=>{ $('serviceModal').classList.add('hidden') };
 $('serviceModal').addEventListener('click',e=>{if(e.target===$('serviceModal'))$('closeService').click()});
 document.querySelectorAll('.panel-close').forEach(el=>el.onclick=hidePanels);
 function hidePanels(){document.querySelector('.right-panel').classList.remove('open');document.querySelector('.left-panel').classList.remove('open')}
+function showMissions(){selectedProject=null;drawInspector();renderJobs();openInspector();}
 function openInspector(){hidePanels();document.querySelector('.right-panel').classList.add('open')}
 canvas.addEventListener('wheel',e=>{if(scene!=='city')return;e.preventDefault();setZoom(camera.zoom*(e.deltaY<0?1.11:.90));},{passive:false});
 
@@ -281,6 +284,7 @@ $('zoomIn').onclick=()=>setZoom(camera.zoom*1.25);
 $('zoomMap').onclick=()=>{camera.follow=false;const center=projectIso(W/2,H/2);camera.cx=center.x;camera.cy=center.y-40;camera.ready=true;setZoom(.4);};
 $('zoomPlayer').onclick=()=>{camera.follow=true;setZoom(1.16);};
 function updateMoveControls(){const obj=store.world.objects.find(o=>o.id===moveId);$('moveControls').classList.toggle('hidden',!obj);if(obj)$('movePosition').textContent=obj.name+': X '+obj.x+' / Y '+obj.y;}
+$('saveBuildingName').onclick=async()=>{try{const data=await api('building/name',{id:selectedObj,name:$('buildingName').value});store.world=data.world;listProjects();toast('Nome do edifício salvo');}catch(e){toast(e.message)}};
 $('finishMove').onclick=()=>{moveId=null;updateMoveControls();};
 document.querySelectorAll('[data-nudge]').forEach(button=>button.onclick=()=>{const obj=store.world.objects.find(o=>o.id===moveId);if(!obj)return;const [dx,dy]=button.dataset.nudge.split(',').map(Number);void editAt(obj.x+dx,obj.y+dy);});
 $('toolSelect').onclick=()=>chooseTool('select');$('toolMove').onclick=()=>chooseTool('move');$('toolErase').onclick=()=>chooseTool('erase');

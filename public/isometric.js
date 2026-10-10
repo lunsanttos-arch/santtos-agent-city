@@ -1,4 +1,4 @@
-import {drawAtlasBuilding,drawAtlasGround,drawAtlasFountain,atlasBuildingHeight} from './atlas.js';
+import {drawAtlasGround,drawAtlasFountain} from './atlas.js';
 // SanTTos Agent City — projeção isométrica original 2:1.
 // O tile lógico agora é 68 × 52; o mapa do editor e as salas 2D são preservados.
 export const ISO={tileWidth:34,tileHeight:17,originX:530,originY:92};
@@ -45,12 +45,12 @@ function tile(ctx,x,y,t,seed,time,terrain){
   }
 }
 function wallWindows(ctx,start,end,topz,count,color){
-  for(let i=1;i<=count;i++){
-    const k=i/(count+1),x=start.x+(end.x-start.x)*k,y=start.y+(end.y-start.y)*k-topz+11;
-    ctx.fillStyle='#7c6a82';ctx.fillRect(x-5,y-1,10,13);
-    ctx.fillStyle=color;ctx.fillRect(x-4,y,8,10);ctx.fillStyle='#efffff';ctx.fillRect(x-3,y+1,4,2);
-    ctx.fillStyle='#738ba6';ctx.fillRect(x,y,1,9);
-  }
+ const dx=end.x-start.x,dy=end.y-start.y,length=Math.hypot(dx,dy),ux=dx/length,uy=dy/length;
+ for(let row=0;row<(topz>60?2:1);row++)for(let i=1;i<=count;i++){
+  const k=i/(count+1),x=start.x+dx*k,y=start.y+dy*k-topz+15+row*25,half=Math.min(7,length/(count+1)*.32);
+  const q=[{x:x-ux*half,y:y-uy*half},{x:x+ux*half,y:y+uy*half},{x:x+ux*half,y:y+uy*half+13},{x:x-ux*half,y:y-uy*half+13}];
+  poly(ctx,q,color,'#526d75');ctx.beginPath();ctx.moveTo(x,y+1);ctx.lineTo(x,y+12);ctx.strokeStyle='#e8f6ed';ctx.stroke();
+ }
 }
 function decorativeRoof(ctx,o,z,left,right,trim){
   const f=quad(o.x,o.y,o.w,o.h,z),ra=projectIso(o.x+o.w*.48,o.y,z+15),rb=projectIso(o.x+o.w*.48,o.y+o.h,z+15);
@@ -66,14 +66,12 @@ function signBoard(ctx,o,z,active){
  ctx.fillStyle='#fff7da';ctx.fillText(text,p.x,p.y);if(active){ctx.fillStyle='#81f1c8';ctx.fillRect(p.x+width/2-10,p.y-12,5,5)}
 }
 function frontDoor(ctx,o,z,accent){
- const d=projectIso(o.x+o.w*.57,o.y+o.h*.96);
- ctx.fillStyle='#3d454d';ctx.fillRect(d.x-10,d.y-z*.42,20,z*.42);
- ctx.fillStyle=accent;ctx.fillRect(d.x-7,d.y-z*.42+3,14,z*.42-3);
- ctx.fillStyle='#f5edb1';ctx.fillRect(d.x+3,d.y-10,3,3);
- const step=projectIso(o.x+o.w*.57,o.y+o.h+0.15);poly(ctx,[{x:step.x-17,y:step.y},{x:step.x,y:step.y-5},{x:step.x+18,y:step.y},{x:step.x,y:step.y+5}],'#c6b2a0');
+ const a=projectIso(o.x+o.w*.48,o.y+o.h),b=projectIso(o.x+o.w*.70,o.y+o.h),height=z*.42;
+ poly(ctx,[{x:a.x,y:a.y-height},{x:b.x,y:b.y-height},b,a],accent,'#47545d');
+ ctx.fillStyle='#f5edb1';ctx.fillRect((a.x+b.x)/2+2,(a.y+b.y)/2-8,2,2);
+ poly(ctx,quad(o.x+o.w*.43,o.y+o.h,o.w*.32,.24,1),'#d8c7a9','#877e69');
 }
 function drawBuilding(ctx,o,count){
- if(drawAtlasBuilding(ctx,o,projectIso(o.x+o.w/2,o.y+o.h/2),(o.w+o.h)*ISO.tileWidth/2+20)){signBoard(ctx,o,atlasBuildingHeight(o,(o.w+o.h)*ISO.tileWidth/2+20)-12,count);return;}
  const z=62,base=quad(o.x,o.y,o.w,o.h),top=quad(o.x,o.y,o.w,o.h,z);
  poly(ctx,[top[1],top[2],base[2],base[1]],'#c4cbbf','#718b8d');poly(ctx,[top[2],top[3],base[3],base[2]],'#eae3ce','#a9ac98');
  const styles={tv:['#a94b71','#e47990'],radar:['#487fa3','#6bb7c8'],office:['#7a66aa','#b5a0d4'],media:['#bc754e','#eab074'],chat:['#58a09d','#8bcfc0']};
@@ -81,15 +79,14 @@ function drawBuilding(ctx,o,count){
  wallWindows(ctx,base[1],base[2],z,4,'#a2d5f2');wallWindows(ctx,base[3],base[2],z,4,'#b1dee5');frontDoor(ctx,o,z,'#8bcbd2');signBoard(ctx,o,z,count);
 }
 function drawHouse(ctx,o){
- if(drawAtlasBuilding(ctx,o,projectIso(o.x+o.w/2,o.y+o.h/2),(o.w+o.h)*ISO.tileWidth/2+16))return;
  const z=44,f=quad(o.x,o.y,o.w,o.h),r=quad(o.x,o.y,o.w,o.h,z);
  const skins=[{wall:'#fff0c9',trim:'#8c6c68',roof:['#a6445c','#e98690'],glass:'#a5dbe6'},
    {wall:'#e0f0ed',trim:'#587e84',roof:['#376f9e','#7fbed8'],glass:'#b4e6e7'},
    {wall:'#f7decd',trim:'#96726a',roof:['#a46b57','#f1ab7d'],glass:'#b2d6ff'},
    {wall:'#eee0f8',trim:'#73618a',roof:['#7654a2','#b499dd'],glass:'#b3dbe2'}];
- const style=skins[(Math.abs(o.x*7+o.y*3))%skins.length];
+ const variant=[...String(o.id||'house')].reduce((n,c)=>n+c.charCodeAt(0),0);const style=skins[variant%skins.length];
  // Little raised foundation with bright masonry and hardwood porch.
- poly(ctx,quad(o.x-.15,o.y-.1,o.w+.3,o.h+.3,-2),'#9b9f77','#5f745d');
+ poly(ctx,quad(o.x,o.y,o.w,o.h,-2),'#9b9f77','#5f745d');
  poly(ctx,[r[1],r[2],f[2],f[1]],style.trim,'#756778');
  poly(ctx,[r[2],r[3],f[3],f[2]],style.wall,'#887e76');
  // Roof ridgeline, opposing dark/shaded slopes and sparkling shingles.
@@ -115,7 +112,6 @@ function drawHouse(ctx,o){
 }
 const SERVICE_STYLES={cityhall:{walls:['#d6c9b3','#f2e9d5'],roof:['#62558c','#a08fbb'],label:'PREFEITURA',symbol:'★'},library:{walls:['#cfb99e','#f8dfbb'],roof:['#795b9e','#c5a3dd'],label:'BIBLIOTECA',symbol:'▤'},university:{walls:['#c6d6d3','#e8f5dc'],roof:['#547fa4','#91bfd7'],label:'UNIVERSIDADE',symbol:'✦'},police:{walls:['#afc4d8','#e6f0ee'],roof:['#405f9e','#8ab5e1'],label:'POLÍCIA',symbol:'◆'},talents:{walls:['#d7c4d7','#f8e1e4'],roof:['#a35c92','#e3a1c8'],label:'TALENTOS',symbol:'✧'}};
 function drawService(ctx,o){
- if(drawAtlasBuilding(ctx,o,projectIso(o.x+o.w/2,o.y+o.h/2),(o.w+o.h)*ISO.tileWidth/2+20)){signBoard(ctx,o,atlasBuildingHeight(o,(o.w+o.h)*ISO.tileWidth/2+20)-12,false);return;}
  const style=SERVICE_STYLES[o.service]||SERVICE_STYLES.cityhall,z=77,f=quad(o.x,o.y,o.w,o.h),r=quad(o.x,o.y,o.w,o.h,z);
  poly(ctx,[r[1],r[2],f[2],f[1]],style.walls[0],'#7d7985');poly(ctx,[r[2],r[3],f[3],f[2]],style.walls[1],'#8c8a8b');decorativeRoof(ctx,o,z,...style.roof,'#544b6c');
  wallWindows(ctx,f[1],f[2],z,Math.max(2,Math.floor(o.h/1.4)),'#b5e7ed');wallWindows(ctx,f[3],f[2],z,Math.max(2,Math.floor(o.w/1.4)),'#b2dcea');frontDoor(ctx,o,z,'#547c9e');
@@ -145,13 +141,25 @@ function decor(ctx,o,time=0){const p=projectIso(o.x+.5,o.y+.5);
   }
   else if(o.kind==='office')drawBuilding(ctx,o,o.activeCount||0);else if(o.kind==='house')drawHouse(ctx,o);else if(o.kind==='service')drawService(ctx,o);
 }
+export function sceneDrawOrder(objects,actors){
+ const items=[...objects.map(obj=>({kind:'obj',obj,x:obj.x,y:obj.y,w:obj.w,h:obj.h})),...actors.map(actor=>({...actor,x:actor.a.x,y:actor.a.y,w:0,h:0}))];
+ const edges=items.map(()=>[]),degree=items.map(()=>0);
+ for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){
+  const a=items[i],b=items[j],ab=a.x+a.w<=b.x||a.y+a.h<=b.y,ba=b.x+b.w<=a.x||b.y+b.h<=a.y;
+  if(ab&&!ba){edges[i].push(j);degree[j]++;}else if(ba&&!ab){edges[j].push(i);degree[i]++;}
+ }
+ const remaining=new Set(items.map((_,i)=>i)),result=[];
+ const depth=i=>items[i].x+items[i].y+(items[i].w+items[i].h)/2;
+ while(remaining.size){let ready=[...remaining].filter(i=>degree[i]===0);if(!ready.length)ready=[...remaining];ready.sort((a,b)=>depth(a)-depth(b));const index=ready[0];remaining.delete(index);result.push(items[index]);for(const next of edges[index])degree[next]--;}
+ return result;
+}
 export function renderIsometric(ctx,{terrain,objects,jobs,avatars,player,hover,editing,tool,time,drawPerson,camera,playerSkin,onPerson}){
   ctx.fillStyle='#85c776';ctx.fillRect(-4500,-4500,9000,9000);
   for(let y=0;y<terrain.length;y++)for(let x=0;x<terrain[y].length;x++){const p=projectIso(x,y);if(camera&&(Math.abs(p.x-camera.cx)>610/camera.zoom||Math.abs(p.y-camera.cy)>435/camera.zoom))continue;tile(ctx,x,y,terrain[y][x],(x*1337+y*613)%101,time,terrain)}
   const active=jobs.filter(j=>j.connected&&(['running','waiting'].includes(j.status)||(j.status==='completed'&&Date.now()-j.updated<300000)));
-  const items=[...objects.map(o=>({depth:o.x+o.y+o.w+o.h,kind:'obj',obj:o})),...avatars.filter(a=>a.resident||a.job&&active.some(j=>j.id===a.job.id)).map(a=>({depth:a.y+a.x,kind:'agent',a})),{depth:player.x+player.y,kind:'mayor'}].sort((a,b)=>a.depth-b.depth);
+  const items=sceneDrawOrder(objects,[...avatars.filter(a=>a.resident||a.job&&active.some(j=>j.id===a.job.id)).map(a=>({kind:'agent',a})),{kind:'mayor',a:player}]);
   for(const i of items){if(i.kind==='obj'){const o=i.obj;const c=projectIso(o.x+o.w/2,o.y+o.h/2);if(camera&&(Math.abs(c.x-camera.cx)>760/camera.zoom||Math.abs(c.y-camera.cy)>590/camera.zoom))continue;decor(ctx,{...o,activeCount:active.filter(j=>j.projectId===o.projectId).length},time)}
-    else if(i.kind==='agent'){const p=projectIso(i.a.x,i.a.y);if(onPerson&&(i.a.agent||i.a.staff))onPerson({x:p.x,y:p.y-21,agent:i.a.agent,staff:i.a.staff});drawPerson(p.x,p.y-21,i.a.color,i.a.dir,i.a.frame,.8);if(i.a.resident){ctx.textAlign='center';ctx.font='bold 8px monospace';ctx.fillStyle=i.a.working?'#0c633e':'#3a425c';ctx.fillText(i.a.name.slice(0,13),p.x,p.y-51);drawActivity(ctx,p.x,p.y-64,i.a.working?'work':i.a.moving?'walk':'rest');}}
+    else if(i.kind==='agent'){const p=projectIso(i.a.x,i.a.y);if(onPerson&&(i.a.agent||i.a.staff))onPerson({x:p.x,y:p.y-21,agent:i.a.agent,staff:i.a.staff});drawPerson(p.x,p.y-21,i.a.color,i.a.dir,i.a.frame,.8);if(i.a.resident){ctx.textAlign='center';ctx.font='bold 8px monospace';ctx.fillStyle=i.a.working?'#0c633e':'#3a425c';ctx.fillText(i.a.name,p.x,p.y-51);drawActivity(ctx,p.x,p.y-64,i.a.working?'work':i.a.moving?'walk':'rest');}}
     else {const p=projectIso(player.x,player.y);drawPerson(p.x,p.y-21,playerSkin||{player:true,spriteIndex:0},player.facing,player.frame,.8)}
   }
   if(editing&&hover&&hover.x>=0&&hover.y>=0&&hover.x<terrain[0].length&&hover.y<terrain.length){const size=tool==='office'?[6,5]:tool==='house'?[4,4]:tool==='fountain'?[3,3]:[1,1];const f=quad(hover.x,hover.y,size[0],size[1],3);poly(ctx,f,'#deb6f058','#fff6ca')}

@@ -16,8 +16,8 @@ function mockGithub(url){
 test('agente nasce persistido e recebe lotação em escritório sem criar sessão de IA',()=>{
  const agent=civic.addAgent({provider:'ollama',role:'engenharia',service:'university'});
  assert.ok(agent.skin&&agent.name);assert.equal(agent.projectId,null);
- const assigned=civic.assignAgent({agentId:agent.id,projectId:'playout',officeFunction:'Engenheiro de áudio'},['playout','radar']);
- assert.equal(assigned.projectId,'playout');assert.equal(civic.all().agents.find(a=>a.id===agent.id).officeFunction,'Engenheiro de áudio');
+ const projectId='teste-'+randomUUID();const assigned=civic.assignAgent({agentId:agent.id,projectId,projectRole:'tester',officeFunction:'Tester'},[projectId,'radar']);
+ assert.equal(assigned.projectId,projectId);assert.equal(civic.all().agents.find(a=>a.id===agent.id).officeFunction,'Tester');
  assert.throws(()=>civic.assignAgent({agentId:agent.id,projectId:'unknown'},['playout']));
  assert.equal(civic.assignAgent({agentId:agent.id,projectId:null},['playout']).projectId,null);
 });
